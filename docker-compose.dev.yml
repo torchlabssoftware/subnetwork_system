@@ -1,0 +1,28 @@
+services:
+  app:
+    build: .
+    container_name: subnetwork_system_dev
+    depends_on:
+      - postgres_dev
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env.dev
+    environment:
+      - APP_ENV=dev
+    restart: unless-stopped
+  postgres_dev:
+    image: postgres:15
+    container_name: subnetwork_system_database_dev
+    restart: always
+    environment:
+      POSTGRES_USER: myuser
+      POSTGRES_PASSWORD: mypassword
+      POSTGRES_DB: mydatabase
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
