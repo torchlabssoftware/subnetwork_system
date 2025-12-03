@@ -3,6 +3,7 @@ package server
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"net/mail"
@@ -41,7 +42,10 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 		functions.RespondwithError(w, http.StatusInternalServerError, "failed to create user", err)
 		return
 	}
-	defer ctx.Rollback()
+	defer func() {
+		_ = ctx.Rollback()
+	}()
+
 	qtx := h.queries.WithTx(ctx)
 
 	//get responce
@@ -69,7 +73,7 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	if req.DataLimit != nil && *req.DataLimit >= int64(0) {
 		dataLimit = *req.DataLimit
 	} else {
-		functions.RespondwithError(w, http.StatusBadRequest, "send valid data limit", err)
+		functions.RespondwithError(w, http.StatusBadRequest, "send valid data limit", fmt.Errorf("send valid data limit"))
 		return
 	}
 
@@ -127,7 +131,10 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx.Commit()
+	if err := ctx.Commit(); err != nil {
+		functions.RespondwithError(w, http.StatusInternalServerError, "failed to create user", err)
+		return
+	}
 
 	responce := server.CreateUserResponce{
 		Id:          user.ID,
