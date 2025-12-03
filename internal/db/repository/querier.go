@@ -6,13 +6,16 @@ package repository
 
 import (
 	"context"
+
+	"github.com/google/uuid"
 )
 
 type Querier interface {
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
-	GetPoolsbyTags(ctx context.Context, dollar_1 []string) ([]Pool, error)
-	InsertUserIpwhitelist(ctx context.Context, arg InsertUserIpwhitelistParams) (UserIpWhitelist, error)
-	InsertUserPool(ctx context.Context, arg InsertUserPoolParams) (UserPool, error)
+	GetPoolsbyTags(ctx context.Context, dollar_1 []string) ([]uuid.UUID, error)
+	GetUserbyId(ctx context.Context, id uuid.UUID) (User, error)
+	InsertUserIpwhitelist(ctx context.Context, arg InsertUserIpwhitelistParams) ([]UserIpWhitelist, error)
+	InsertUserPool(ctx context.Context, arg InsertUserPoolParams) ([]UserPool, error)
 }
 
 var _ Querier = (*Queries)(nil)

@@ -8,36 +8,28 @@ package repository
 import (
 	"context"
 
+	"github.com/google/uuid"
 	"github.com/lib/pq"
 )
 
 const getPoolsbyTags = `-- name: GetPoolsbyTags :many
-SELECT id, name, tag, region_id, subdomain, port, created_at, updated_at FROM pool
+SELECT pool.id FROM pool
 WHERE pool.tag = ANY($1::text[])
 `
 
-func (q *Queries) GetPoolsbyTags(ctx context.Context, dollar_1 []string) ([]Pool, error) {
+func (q *Queries) GetPoolsbyTags(ctx context.Context, dollar_1 []string) ([]uuid.UUID, error) {
 	rows, err := q.db.QueryContext(ctx, getPoolsbyTags, pq.Array(dollar_1))
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Pool
+	var items []uuid.UUID
 	for rows.Next() {
-		var i Pool
-		if err := rows.Scan(
-			&i.ID,
-			&i.Name,
-			&i.Tag,
-			&i.RegionID,
-			&i.Subdomain,
-			&i.Port,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-		); err != nil {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
 			return nil, err
 		}
-		items = append(items, i)
+		items = append(items, id)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err

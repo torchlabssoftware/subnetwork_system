@@ -32,7 +32,7 @@ func NewRouter(pool *sql.DB) http.Handler {
 	router.Route("/admin", func(r chi.Router) {
 		q := repository.New(pool)
 
-		h := server.NewUserHandler(q)
+		h := server.NewUserHandler(q, pool)
 		r.Mount("/user", h.Routes())
 	})
 

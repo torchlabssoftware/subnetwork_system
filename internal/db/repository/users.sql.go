@@ -10,6 +10,7 @@ import (
 	"database/sql"
 
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 )
 
 const createUser = `-- name: CreateUser :one
@@ -47,43 +48,97 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 	return i, err
 }
 
-const insertUserIpwhitelist = `-- name: InsertUserIpwhitelist :one
-INSERT INTO user_ip_whitelist(user_id,ip_cidr)
-VALUES($1,$2)
-RETURNING id, user_id, ip_cidr, created_at
+const getUserbyId = `-- name: GetUserbyId :one
+SELECT id, email, username, password, data_limit, data_usage, status, created_at, updated_at FROM "user" as u
+WHERE u.id = $1
 `
 
-type InsertUserIpwhitelistParams struct {
-	UserID uuid.UUID
-	IpCidr string
-}
-
-func (q *Queries) InsertUserIpwhitelist(ctx context.Context, arg InsertUserIpwhitelistParams) (UserIpWhitelist, error) {
-	row := q.db.QueryRowContext(ctx, insertUserIpwhitelist, arg.UserID, arg.IpCidr)
-	var i UserIpWhitelist
+func (q *Queries) GetUserbyId(ctx context.Context, id uuid.UUID) (User, error) {
+	row := q.db.QueryRowContext(ctx, getUserbyId, id)
+	var i User
 	err := row.Scan(
 		&i.ID,
-		&i.UserID,
-		&i.IpCidr,
+		&i.Email,
+		&i.Username,
+		&i.Password,
+		&i.DataLimit,
+		&i.DataUsage,
+		&i.Status,
 		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
 
-const insertUserPool = `-- name: InsertUserPool :one
-INSERT INTO user_pools(pool_id,user_id)
-values ($1,$2)
+const insertUserIpwhitelist = `-- name: InsertUserIpwhitelist :many
+INSERT INTO user_ip_whitelist(user_id,ip_cidr)
+SELECT $1, UNNEST($2::text[])
+RETURNING id, user_id, ip_cidr, created_at
+`
+
+type InsertUserIpwhitelistParams struct {
+	UserID  uuid.UUID
+	Column2 []string
+}
+
+func (q *Queries) InsertUserIpwhitelist(ctx context.Context, arg InsertUserIpwhitelistParams) ([]UserIpWhitelist, error) {
+	rows, err := q.db.QueryContext(ctx, insertUserIpwhitelist, arg.UserID, pq.Array(arg.Column2))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []UserIpWhitelist
+	for rows.Next() {
+		var i UserIpWhitelist
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.IpCidr,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const insertUserPool = `-- name: InsertUserPool :many
+INSERT INTO user_pools(user_id,pool_id)
+SELECT $1, UNNEST($2::uuid[])
 RETURNING id, pool_id, user_id
 `
 
 type InsertUserPoolParams struct {
-	PoolID uuid.UUID
-	UserID uuid.UUID
+	UserID  uuid.UUID
+	Column2 []uuid.UUID
 }
 
-func (q *Queries) InsertUserPool(ctx context.Context, arg InsertUserPoolParams) (UserPool, error) {
-	row := q.db.QueryRowContext(ctx, insertUserPool, arg.PoolID, arg.UserID)
-	var i UserPool
-	err := row.Scan(&i.ID, &i.PoolID, &i.UserID)
-	return i, err
+func (q *Queries) InsertUserPool(ctx context.Context, arg InsertUserPoolParams) ([]UserPool, error) {
+	rows, err := q.db.QueryContext(ctx, insertUserPool, arg.UserID, pq.Array(arg.Column2))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []UserPool
+	for rows.Next() {
+		var i UserPool
+		if err := rows.Scan(&i.ID, &i.PoolID, &i.UserID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }

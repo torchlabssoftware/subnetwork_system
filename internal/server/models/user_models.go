@@ -1,5 +1,7 @@
 package server
 
+import "github.com/google/uuid"
+
 type CreateUserRequest struct {
 	Email       *string   `json:"email"`
 	DataLimit   *int64    `json:"data_limit"`
@@ -8,9 +10,10 @@ type CreateUserRequest struct {
 }
 
 type CreateUserResponce struct {
-	Username    *string   `json:"username,omitempty"`
-	Password    *string   `json:"password,omitempty"`
-	DataLimit   *int64    `json:"data_limit,omitempty"`
-	IpWhitelist *[]string `json:"ip_whitelist,omitempty"`
-	AllowPools  *[]string `json:"allow_pools,omitempty"`
+	Id          uuid.UUID `json:"id,omitempty"`
+	Username    string    `json:"username,omitempty"`
+	Password    string    `json:"password,omitempty"`
+	DataLimit   int64     `json:"data_limit,omitempty"`
+	IpWhitelist []string  `json:"ip_whitelist,omitempty"`
+	AllowPools  []string  `json:"allow_pools,omitempty"`
 }

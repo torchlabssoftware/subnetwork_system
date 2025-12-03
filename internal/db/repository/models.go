@@ -71,7 +71,7 @@ type UserIpWhitelist struct {
 	ID        uuid.UUID
 	UserID    uuid.UUID
 	IpCidr    string
-	CreatedAt sql.NullTime
+	CreatedAt time.Time
 }
 
 type UserPool struct {
