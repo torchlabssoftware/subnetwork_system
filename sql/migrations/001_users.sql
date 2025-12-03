@@ -42,7 +42,7 @@ CREATE TABLE user_ip_whitelist (
 CREATE TABLE pool (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL,
-    tag TEXT,
+    tag TEXT NOT NULL,
     region_id UUID REFERENCES region(id) ON DELETE SET NULL,
     subdomain TEXT,
     port INT NOT NULL,

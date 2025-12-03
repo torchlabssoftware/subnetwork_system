@@ -23,7 +23,7 @@ type Country struct {
 type Pool struct {
 	ID        uuid.UUID
 	Name      string
-	Tag       sql.NullString
+	Tag       string
 	RegionID  uuid.NullUUID
 	Subdomain sql.NullString
 	Port      int32

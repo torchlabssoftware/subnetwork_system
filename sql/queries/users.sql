@@ -16,3 +16,13 @@ RETURNING *;
 -- name: GetUserbyId :one
 SELECT * FROM "user" as u
 WHERE u.id = $1;
+
+-- name: GetUserPoolByUserId :many
+SELECT tag FROM user_pools AS up
+JOIN pool AS P 
+ON UP.POOL_ID = P.ID 
+WHERE up.user_id = $1;
+
+-- name: GetIpWhitelistByUserId :many
+SELECT ip_cidr FROM user_ip_whitelist AS iw
+WHERE iw.user_id = $1;

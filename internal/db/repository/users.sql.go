@@ -48,6 +48,64 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 	return i, err
 }
 
+const getIpWhitelistByUserId = `-- name: GetIpWhitelistByUserId :many
+SELECT ip_cidr FROM user_ip_whitelist AS iw
+WHERE iw.user_id = $1
+`
+
+func (q *Queries) GetIpWhitelistByUserId(ctx context.Context, userID uuid.UUID) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, getIpWhitelistByUserId, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var ip_cidr string
+		if err := rows.Scan(&ip_cidr); err != nil {
+			return nil, err
+		}
+		items = append(items, ip_cidr)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getUserPoolByUserId = `-- name: GetUserPoolByUserId :many
+SELECT tag FROM user_pools AS up
+JOIN pool AS P 
+ON UP.POOL_ID = P.ID 
+WHERE up.user_id = $1
+`
+
+func (q *Queries) GetUserPoolByUserId(ctx context.Context, userID uuid.UUID) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, getUserPoolByUserId, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var tag string
+		if err := rows.Scan(&tag); err != nil {
+			return nil, err
+		}
+		items = append(items, tag)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getUserbyId = `-- name: GetUserbyId :one
 SELECT id, email, username, password, data_limit, data_usage, status, created_at, updated_at FROM "user" as u
 WHERE u.id = $1

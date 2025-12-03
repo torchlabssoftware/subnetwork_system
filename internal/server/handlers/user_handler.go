@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"net/mail"
 
@@ -149,22 +148,62 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *UserHandler) GetUserbyId(w http.ResponseWriter, r *http.Request) {
+	//begin transaction
+	ctx, err := h.db.Begin()
+	if err != nil {
+		functions.RespondwithError(w, http.StatusInternalServerError, "failed to create user", err)
+		return
+	}
+	defer func() {
+		_ = ctx.Rollback()
+	}()
+	qtx := h.queries.WithTx(ctx)
+
+	//get user params and get user data
 	queryParams := r.URL.Query()
 	userId := queryParams.Get("user-id")
 	userIdUUID, err := uuid.Parse(userId)
 	if err != nil {
-		http.Error(w, "bad request", http.StatusBadRequest)
-		log.Printf("cant get user by id:%v", err)
+		functions.RespondwithError(w, http.StatusInternalServerError, "incorrect user id", err)
 		return
 	}
 
-	user, err := h.queries.GetUserbyId(r.Context(), userIdUUID)
+	user, err := qtx.GetUserbyId(r.Context(), userIdUUID)
 	if err != nil {
-		http.Error(w, "server error", http.StatusInternalServerError)
-		log.Printf("cant get user by id:%v", err)
+		functions.RespondwithError(w, http.StatusInternalServerError, "cant get user by id", err)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(user)
+	userPools, err := qtx.GetUserPoolByUserId(r.Context(), user.ID)
+	if err != nil {
+		functions.RespondwithError(w, http.StatusInternalServerError, "cant get user by id", err)
+		return
+	}
+
+	ipWhitelist, err := qtx.GetIpWhitelistByUserId(r.Context(), user.ID)
+	if err != nil {
+		functions.RespondwithError(w, http.StatusInternalServerError, "cant get user by id", err)
+		return
+	}
+
+	resp := server.GetUserByIdResponce{
+		Id:          user.ID,
+		Email:       user.Email.String,
+		Username:    user.Username,
+		Password:    user.Password,
+		Data_limit:  user.DataLimit,
+		Data_usage:  user.DataUsage,
+		Status:      user.Status,
+		IpWhitelist: ipWhitelist,
+		UserPool:    userPools,
+		Created_at:  user.CreatedAt,
+		Updated_at:  user.UpdatedAt,
+	}
+
+	if err := ctx.Commit(); err != nil {
+		functions.RespondwithError(w, http.StatusInternalServerError, "failed to create user", err)
+		return
+	}
+
+	functions.RespondwithJSON(w, http.StatusInternalServerError, resp)
 }

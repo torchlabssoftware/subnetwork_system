@@ -1,6 +1,10 @@
 package server
 
-import "github.com/google/uuid"
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
 
 type CreateUserRequest struct {
 	Email       *string   `json:"email"`
@@ -16,4 +20,18 @@ type CreateUserResponce struct {
 	DataLimit   int64     `json:"data_limit,omitempty"`
 	IpWhitelist []string  `json:"ip_whitelist,omitempty"`
 	AllowPools  []string  `json:"allow_pools,omitempty"`
+}
+
+type GetUserByIdResponce struct {
+	Id          uuid.UUID `json:"id,omitempty"`
+	Email       string    `json:"email,omitempty"`
+	Username    string    `json:"username,omitempty"`
+	Password    string    `json:"password,omitempty"`
+	Data_limit  int64     `json:"data_limit,omitempty"`
+	Data_usage  int64     `json:"data_usage,omitempty"`
+	Status      string    `json:"status,omitempty"`
+	UserPool    []string  `json:"user_pool,omitempty"`
+	IpWhitelist []string  `json:"ip_whitelist,omitempty"`
+	Created_at  time.Time `json:"created_at,omitempty"`
+	Updated_at  time.Time `json:"updated_at,omitempty"`
 }
