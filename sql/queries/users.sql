@@ -14,15 +14,40 @@ SELECT $1, UNNEST($2::text[])
 RETURNING *;
 
 -- name: GetUserbyId :one
-SELECT * FROM "user" as u
-WHERE u.id = $1;
+SELECT 
+    u.id,
+    u.username,
+    u.password,
+    u.data_usage,
+    u.email,
+    u.status,
+    u.data_limit,
+    u.created_at,
+    u.updated_at,
+    COALESCE(ARRAY_AGG(DISTINCT iw.ip_cidr) FILTER (WHERE iw.ip_cidr IS NOT NULL), '{}')::text[] AS ip_whitelist,
+    COALESCE(ARRAY_AGG(DISTINCT p.name) FILTER (WHERE p.name IS NOT NULL), '{}')::text[] AS pools
+FROM "user" AS u
+LEFT JOIN user_ip_whitelist AS iw ON u.id = iw.user_id
+LEFT JOIN user_pools AS up ON u.id = up.user_id
+LEFT JOIN pool AS p ON up.pool_id = p.id
+WHERE u.id = $1
+GROUP BY u.id;
 
--- name: GetUserPoolByUserId :many
-SELECT tag FROM user_pools AS up
-JOIN pool AS P 
-ON UP.POOL_ID = P.ID 
-WHERE up.user_id = $1;
-
--- name: GetIpWhitelistByUserId :many
-SELECT ip_cidr FROM user_ip_whitelist AS iw
-WHERE iw.user_id = $1;
+-- name: GetAllusers :many
+SELECT 
+    u.id,
+    u.username,
+    u.password,
+    u.data_usage,
+    u.email,
+    u.status,
+    u.data_limit,
+    u.created_at,
+    u.updated_at,
+    COALESCE(ARRAY_AGG(DISTINCT iw.ip_cidr) FILTER (WHERE iw.ip_cidr IS NOT NULL), '{}')::text[] AS ip_whitelist,
+    COALESCE(ARRAY_AGG(DISTINCT p.name) FILTER (WHERE p.name IS NOT NULL), '{}')::text[] AS pools
+FROM "user" AS u
+LEFT JOIN user_ip_whitelist AS iw ON u.id = iw.user_id
+LEFT JOIN user_pools AS up ON u.id = up.user_id
+LEFT JOIN pool AS p ON up.pool_id = p.id
+GROUP BY u.id;

@@ -28,7 +28,7 @@ type GetUserByIdResponce struct {
 	Username    string    `json:"username,omitempty"`
 	Password    string    `json:"password,omitempty"`
 	Data_limit  int64     `json:"data_limit,omitempty"`
-	Data_usage  int64     `json:"data_usage,omitempty"`
+	Data_usage  int64     `json:"data_usage"`
 	Status      string    `json:"status,omitempty"`
 	UserPool    []string  `json:"user_pool,omitempty"`
 	IpWhitelist []string  `json:"ip_whitelist,omitempty"`

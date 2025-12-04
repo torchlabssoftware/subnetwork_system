@@ -24,11 +24,11 @@ type Pool struct {
 	ID        uuid.UUID
 	Name      string
 	Tag       string
-	RegionID  uuid.NullUUID
-	Subdomain sql.NullString
+	RegionID  uuid.UUID
+	Subdomain string
 	Port      int32
-	CreatedAt sql.NullTime
-	UpdatedAt sql.NullTime
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 type PoolUpstreamWeight struct {

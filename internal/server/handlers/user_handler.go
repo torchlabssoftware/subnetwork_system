@@ -29,7 +29,8 @@ func NewUserHandler(q *repository.Queries, db *sql.DB) *UserHandler {
 func (h *UserHandler) Routes() http.Handler {
 	r := chi.NewRouter()
 	r.Post("/", h.CreateUser)
-	r.Get("/", h.GetUserbyId)
+	r.Get("/", h.GetUsers)
+	r.Get("/{id}", h.GetUserbyId)
 	return r
 }
 
@@ -148,39 +149,17 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *UserHandler) GetUserbyId(w http.ResponseWriter, r *http.Request) {
-	//begin transaction
-	ctx, err := h.db.Begin()
-	if err != nil {
-		functions.RespondwithError(w, http.StatusInternalServerError, "failed to create user", err)
-		return
-	}
-	defer func() {
-		_ = ctx.Rollback()
-	}()
-	qtx := h.queries.WithTx(ctx)
 
 	//get user params and get user data
-	queryParams := r.URL.Query()
-	userId := queryParams.Get("user-id")
+	userId := chi.URLParam(r, "id")
+	//userId := queryParams.Get("user-id")
 	userIdUUID, err := uuid.Parse(userId)
 	if err != nil {
 		functions.RespondwithError(w, http.StatusInternalServerError, "incorrect user id", err)
 		return
 	}
 
-	user, err := qtx.GetUserbyId(r.Context(), userIdUUID)
-	if err != nil {
-		functions.RespondwithError(w, http.StatusInternalServerError, "cant get user by id", err)
-		return
-	}
-
-	userPools, err := qtx.GetUserPoolByUserId(r.Context(), user.ID)
-	if err != nil {
-		functions.RespondwithError(w, http.StatusInternalServerError, "cant get user by id", err)
-		return
-	}
-
-	ipWhitelist, err := qtx.GetIpWhitelistByUserId(r.Context(), user.ID)
+	user, err := h.queries.GetUserbyId(r.Context(), userIdUUID)
 	if err != nil {
 		functions.RespondwithError(w, http.StatusInternalServerError, "cant get user by id", err)
 		return
@@ -194,16 +173,40 @@ func (h *UserHandler) GetUserbyId(w http.ResponseWriter, r *http.Request) {
 		Data_limit:  user.DataLimit,
 		Data_usage:  user.DataUsage,
 		Status:      user.Status,
-		IpWhitelist: ipWhitelist,
-		UserPool:    userPools,
+		IpWhitelist: user.IpWhitelist,
+		UserPool:    user.Pools,
 		Created_at:  user.CreatedAt,
 		Updated_at:  user.UpdatedAt,
 	}
 
-	if err := ctx.Commit(); err != nil {
-		functions.RespondwithError(w, http.StatusInternalServerError, "failed to create user", err)
+	functions.RespondwithJSON(w, http.StatusOK, resp)
+}
+
+func (h *UserHandler) GetUsers(w http.ResponseWriter, r *http.Request) {
+
+	users, err := h.queries.GetAllusers(r.Context())
+	if err != nil {
+		functions.RespondwithError(w, http.StatusInternalServerError, "cant get users by id", err)
 		return
 	}
 
-	functions.RespondwithJSON(w, http.StatusInternalServerError, resp)
+	resp := []server.GetUserByIdResponce{}
+
+	for _, user := range users {
+		resp = append(resp, server.GetUserByIdResponce{
+			Id:          user.ID,
+			Email:       user.Email.String,
+			Username:    user.Username,
+			Password:    user.Password,
+			Data_limit:  user.DataLimit,
+			Data_usage:  user.DataUsage,
+			Status:      user.Status,
+			IpWhitelist: user.IpWhitelist,
+			UserPool:    user.Pools,
+			Created_at:  user.CreatedAt,
+			Updated_at:  user.UpdatedAt,
+		})
+	}
+
+	functions.RespondwithJSON(w, http.StatusOK, resp)
 }

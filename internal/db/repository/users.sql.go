@@ -8,6 +8,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/lib/pq"
@@ -48,54 +49,66 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 	return i, err
 }
 
-const getIpWhitelistByUserId = `-- name: GetIpWhitelistByUserId :many
-SELECT ip_cidr FROM user_ip_whitelist AS iw
-WHERE iw.user_id = $1
+const getAllusers = `-- name: GetAllusers :many
+SELECT 
+    u.id,
+    u.username,
+    u.password,
+    u.data_usage,
+    u.email,
+    u.status,
+    u.data_limit,
+    u.created_at,
+    u.updated_at,
+    -- FIX: Filter out NULLs and default to empty array
+    COALESCE(ARRAY_AGG(DISTINCT iw.ip_cidr) FILTER (WHERE iw.ip_cidr IS NOT NULL), '{}')::text[] AS ip_whitelist,
+    COALESCE(ARRAY_AGG(DISTINCT p.name) FILTER (WHERE p.name IS NOT NULL), '{}')::text[] AS pools
+FROM "user" AS u
+LEFT JOIN user_ip_whitelist AS iw ON u.id = iw.user_id
+LEFT JOIN user_pools AS up ON u.id = up.user_id
+LEFT JOIN pool AS p ON up.pool_id = p.id
+GROUP BY u.id
 `
 
-func (q *Queries) GetIpWhitelistByUserId(ctx context.Context, userID uuid.UUID) ([]string, error) {
-	rows, err := q.db.QueryContext(ctx, getIpWhitelistByUserId, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []string
-	for rows.Next() {
-		var ip_cidr string
-		if err := rows.Scan(&ip_cidr); err != nil {
-			return nil, err
-		}
-		items = append(items, ip_cidr)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
+type GetAllusersRow struct {
+	ID          uuid.UUID
+	Username    string
+	Password    string
+	DataUsage   int64
+	Email       sql.NullString
+	Status      string
+	DataLimit   int64
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	IpWhitelist []string
+	Pools       []string
 }
 
-const getUserPoolByUserId = `-- name: GetUserPoolByUserId :many
-SELECT tag FROM user_pools AS up
-JOIN pool AS P 
-ON UP.POOL_ID = P.ID 
-WHERE up.user_id = $1
-`
-
-func (q *Queries) GetUserPoolByUserId(ctx context.Context, userID uuid.UUID) ([]string, error) {
-	rows, err := q.db.QueryContext(ctx, getUserPoolByUserId, userID)
+func (q *Queries) GetAllusers(ctx context.Context) ([]GetAllusersRow, error) {
+	rows, err := q.db.QueryContext(ctx, getAllusers)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []string
+	var items []GetAllusersRow
 	for rows.Next() {
-		var tag string
-		if err := rows.Scan(&tag); err != nil {
+		var i GetAllusersRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Username,
+			&i.Password,
+			&i.DataUsage,
+			&i.Email,
+			&i.Status,
+			&i.DataLimit,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			pq.Array(&i.IpWhitelist),
+			pq.Array(&i.Pools),
+		); err != nil {
 			return nil, err
 		}
-		items = append(items, tag)
+		items = append(items, i)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
@@ -107,23 +120,56 @@ func (q *Queries) GetUserPoolByUserId(ctx context.Context, userID uuid.UUID) ([]
 }
 
 const getUserbyId = `-- name: GetUserbyId :one
-SELECT id, email, username, password, data_limit, data_usage, status, created_at, updated_at FROM "user" as u
+SELECT 
+    u.id,
+    u.username,
+    u.password,
+    u.data_usage,
+    u.email,
+    u.status,
+    u.data_limit,
+    u.created_at,
+    u.updated_at,
+    -- FIX: Filter out NULLs and default to empty array
+    COALESCE(ARRAY_AGG(DISTINCT iw.ip_cidr) FILTER (WHERE iw.ip_cidr IS NOT NULL), '{}')::text[] AS ip_whitelist,
+    COALESCE(ARRAY_AGG(DISTINCT p.name) FILTER (WHERE p.name IS NOT NULL), '{}')::text[] AS pools
+FROM "user" AS u
+LEFT JOIN user_ip_whitelist AS iw ON u.id = iw.user_id
+LEFT JOIN user_pools AS up ON u.id = up.user_id
+LEFT JOIN pool AS p ON up.pool_id = p.id
 WHERE u.id = $1
+GROUP BY u.id
 `
 
-func (q *Queries) GetUserbyId(ctx context.Context, id uuid.UUID) (User, error) {
+type GetUserbyIdRow struct {
+	ID          uuid.UUID
+	Username    string
+	Password    string
+	DataUsage   int64
+	Email       sql.NullString
+	Status      string
+	DataLimit   int64
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
+	IpWhitelist []string
+	Pools       []string
+}
+
+func (q *Queries) GetUserbyId(ctx context.Context, id uuid.UUID) (GetUserbyIdRow, error) {
 	row := q.db.QueryRowContext(ctx, getUserbyId, id)
-	var i User
+	var i GetUserbyIdRow
 	err := row.Scan(
 		&i.ID,
-		&i.Email,
 		&i.Username,
 		&i.Password,
-		&i.DataLimit,
 		&i.DataUsage,
+		&i.Email,
 		&i.Status,
+		&i.DataLimit,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		pq.Array(&i.IpWhitelist),
+		pq.Array(&i.Pools),
 	)
 	return i, err
 }
