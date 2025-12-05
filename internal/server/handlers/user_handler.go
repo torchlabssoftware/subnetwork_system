@@ -52,7 +52,8 @@ func (h *UserHandler) createUser(w http.ResponseWriter, r *http.Request) {
 	//get responce
 	var req server.CreateUserRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		functions.RespondwithError(w, http.StatusBadRequest, "bad request in create user", err)
+		functions.RespondwithError(w, http.StatusBadRequest, "invalid request body", err)
+		fmt.Print(err)
 		return
 	}
 
@@ -61,7 +62,7 @@ func (h *UserHandler) createUser(w http.ResponseWriter, r *http.Request) {
 	if req.Email != nil && *req.Email != "" {
 		mail, err := mail.ParseAddress(*req.Email)
 		if err != nil {
-			functions.RespondwithError(w, http.StatusBadRequest, "bad request in create user", err)
+			functions.RespondwithError(w, http.StatusBadRequest, "invalid email", err)
 			return
 		}
 		email = sql.NullString{String: mail.Address, Valid: true}
