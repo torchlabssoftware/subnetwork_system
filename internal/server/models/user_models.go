@@ -59,3 +59,12 @@ type GetUserPoolResponce struct {
 	UserId uuid.UUID `json:"user_id"`
 	Pools  []string  `json:"pools"`
 }
+
+type AddUserPoolRequest struct {
+	UserPool []string `json:"user_pool"`
+}
+
+type AddUserPoolResponce struct {
+	UserId   uuid.UUID `json:"user_id,omitempty"`
+	UserPool []string  `json:"user_pool,omitempty"`
+}

@@ -35,7 +35,7 @@ func (h *UserHandler) Routes() http.Handler {
 	r.Delete("/{id}", h.deleteUser)
 	r.Get("/{id}/data-usage", h.getDataUsage)
 	r.Get("/{id}/pools", h.getUserAllowPools)
-	//r.Patch("/{id}/pools", h.addUserAllowPool)
+	r.Post("/{id}/pools", h.addUserAllowPool)
 	//r.Delete("/{id}/pools", h.removeUserAllowPool)
 	return r
 }
@@ -340,7 +340,7 @@ func (h *UserHandler) getUserAllowPools(w http.ResponseWriter, r *http.Request) 
 
 }
 
-/*func (h *UserHandler) addUserAllowPool(w http.ResponseWriter, r *http.Request) {
+func (h *UserHandler) addUserAllowPool(w http.ResponseWriter, r *http.Request) {
 	//get the user id
 	userId := chi.URLParam(r, "id")
 	id, err := uuid.Parse(userId)
@@ -348,9 +348,39 @@ func (h *UserHandler) getUserAllowPools(w http.ResponseWriter, r *http.Request) 
 		functions.RespondwithError(w, http.StatusBadRequest, "invalid user id", err)
 		return
 	}
+
+	var req server.AddUserPoolRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		functions.RespondwithError(w, http.StatusInternalServerError, "server error", err)
+		return
+	}
+
+	pools, err := h.queries.GetPoolsbyTags(r.Context(), req.UserPool)
+	if err != nil {
+		functions.RespondwithError(w, http.StatusInternalServerError, "server error", err)
+		return
+	}
+
+	arg := repository.InsertUserPoolParams{
+		UserID:  id,
+		Column2: pools,
+	}
+
+	_, err = h.queries.InsertUserPool(r.Context(), arg)
+	if err != nil {
+		functions.RespondwithError(w, http.StatusInternalServerError, "server error", err)
+		return
+	}
+
+	res := server.AddUserPoolResponce{
+		UserId:   id,
+		UserPool: req.UserPool,
+	}
+
+	functions.RespondwithJSON(w, http.StatusCreated, res)
 }
 
-func (h *UserHandler) removeUserAllowPool(w http.ResponseWriter, r *http.Request) {
+/*func (h *UserHandler) removeUserAllowPool(w http.ResponseWriter, r *http.Request) {
 	//get the user id
 	userId := chi.URLParam(r, "id")
 	id, err := uuid.Parse(userId)
