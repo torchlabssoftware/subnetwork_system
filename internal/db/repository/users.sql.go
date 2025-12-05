@@ -60,7 +60,6 @@ SELECT
     u.data_limit,
     u.created_at,
     u.updated_at,
-    -- FIX: Filter out NULLs and default to empty array
     COALESCE(ARRAY_AGG(DISTINCT iw.ip_cidr) FILTER (WHERE iw.ip_cidr IS NOT NULL), '{}')::text[] AS ip_whitelist,
     COALESCE(ARRAY_AGG(DISTINCT p.name) FILTER (WHERE p.name IS NOT NULL), '{}')::text[] AS pools
 FROM "user" AS u
@@ -130,7 +129,6 @@ SELECT
     u.data_limit,
     u.created_at,
     u.updated_at,
-    -- FIX: Filter out NULLs and default to empty array
     COALESCE(ARRAY_AGG(DISTINCT iw.ip_cidr) FILTER (WHERE iw.ip_cidr IS NOT NULL), '{}')::text[] AS ip_whitelist,
     COALESCE(ARRAY_AGG(DISTINCT p.name) FILTER (WHERE p.name IS NOT NULL), '{}')::text[] AS pools
 FROM "user" AS u
@@ -245,4 +243,44 @@ func (q *Queries) InsertUserPool(ctx context.Context, arg InsertUserPoolParams) 
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateUser = `-- name: UpdateUser :one
+UPDATE "user" 
+SET 
+email = COALESCE($2,email), 
+data_limit = COALESCE($3,data_limit), 
+status = COALESCE($4,status),
+updated_at = CURRENT_TIMESTAMP
+WHERE id = $1
+RETURNING id, email, username, password, data_limit, data_usage, status, created_at, updated_at
+`
+
+type UpdateUserParams struct {
+	ID        uuid.UUID
+	Email     sql.NullString
+	DataLimit sql.NullInt64
+	Status    sql.NullString
+}
+
+func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error) {
+	row := q.db.QueryRowContext(ctx, updateUser,
+		arg.ID,
+		arg.Email,
+		arg.DataLimit,
+		arg.Status,
+	)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.Username,
+		&i.Password,
+		&i.DataLimit,
+		&i.DataUsage,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }

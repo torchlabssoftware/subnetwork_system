@@ -28,13 +28,14 @@ func NewUserHandler(q *repository.Queries, db *sql.DB) *UserHandler {
 
 func (h *UserHandler) Routes() http.Handler {
 	r := chi.NewRouter()
-	r.Post("/", h.CreateUser)
-	r.Get("/", h.GetUsers)
-	r.Get("/{id}", h.GetUserbyId)
+	r.Post("/", h.createUser)
+	r.Get("/", h.getUsers)
+	r.Get("/{id}", h.getUserbyId)
+	r.Patch("/{id}", h.updateUser)
 	return r
 }
 
-func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
+func (h *UserHandler) createUser(w http.ResponseWriter, r *http.Request) {
 
 	//begin transaction
 	ctx, err := h.db.Begin()
@@ -63,7 +64,7 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 			functions.RespondwithError(w, http.StatusBadRequest, "bad request in create user", err)
 			return
 		}
-		email = sql.NullString{String: mail.String(), Valid: true}
+		email = sql.NullString{String: mail.Address, Valid: true}
 	} else {
 		email = sql.NullString{Valid: false}
 	}
@@ -148,7 +149,7 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	functions.RespondwithJSON(w, http.StatusCreated, responce)
 }
 
-func (h *UserHandler) GetUserbyId(w http.ResponseWriter, r *http.Request) {
+func (h *UserHandler) getUserbyId(w http.ResponseWriter, r *http.Request) {
 
 	//get user params and get user data
 	userId := chi.URLParam(r, "id")
@@ -182,7 +183,7 @@ func (h *UserHandler) GetUserbyId(w http.ResponseWriter, r *http.Request) {
 	functions.RespondwithJSON(w, http.StatusOK, resp)
 }
 
-func (h *UserHandler) GetUsers(w http.ResponseWriter, r *http.Request) {
+func (h *UserHandler) getUsers(w http.ResponseWriter, r *http.Request) {
 
 	users, err := h.queries.GetAllusers(r.Context())
 	if err != nil {
@@ -209,4 +210,51 @@ func (h *UserHandler) GetUsers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	functions.RespondwithJSON(w, http.StatusOK, resp)
+}
+
+func (h *UserHandler) updateUser(w http.ResponseWriter, r *http.Request) {
+	//get the user id
+	userId := chi.URLParam(r, "id")
+	id, err := uuid.Parse(userId)
+	if err != nil {
+		functions.RespondwithError(w, http.StatusBadRequest, "invalid user id", err)
+		fmt.Println(err)
+		return
+	}
+
+	var req server.UpdateUserRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		functions.RespondwithError(w, http.StatusBadRequest, "invalid body", err)
+		fmt.Println(err)
+		return
+	}
+
+	params := repository.UpdateUserParams{
+		ID: id,
+	}
+
+	if req.Email != nil && *req.Email != "" {
+		mail, err := mail.ParseAddress(*req.Email)
+		if err != nil {
+			functions.RespondwithError(w, http.StatusBadRequest, "enter correct email", err)
+			return
+		}
+		params.Email = sql.NullString{String: mail.Address, Valid: true}
+	}
+
+	if req.DataLimit != nil {
+		params.DataLimit = sql.NullInt64{Int64: *req.DataLimit, Valid: true}
+	}
+
+	if req.Status != nil && *req.Status != "" {
+		params.Status = sql.NullString{String: *req.Status, Valid: true}
+	}
+
+	user, err := h.queries.UpdateUser(r.Context(), params)
+	if err != nil {
+		functions.RespondwithError(w, http.StatusInternalServerError, "server error", err)
+		return
+	}
+
+	functions.RespondwithJSON(w, http.StatusOK, user)
 }

@@ -35,3 +35,9 @@ type GetUserByIdResponce struct {
 	Created_at  time.Time `json:"created_at,omitempty"`
 	Updated_at  time.Time `json:"updated_at,omitempty"`
 }
+
+type UpdateUserRequest struct {
+	Email     *string `json:"email"`
+	DataLimit *int64  `json:"data_limit"`
+	Status    *string `json:"status"`
+}

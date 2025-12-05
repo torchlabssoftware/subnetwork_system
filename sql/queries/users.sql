@@ -51,3 +51,13 @@ LEFT JOIN user_ip_whitelist AS iw ON u.id = iw.user_id
 LEFT JOIN user_pools AS up ON u.id = up.user_id
 LEFT JOIN pool AS p ON up.pool_id = p.id
 GROUP BY u.id;
+
+-- name: UpdateUser :one
+UPDATE "user" 
+SET 
+email = COALESCE(sqlc.narg('email'),email), 
+data_limit = COALESCE(sqlc.narg('data_limit'),data_limit), 
+status = COALESCE(sqlc.narg('status'),status),
+updated_at = CURRENT_TIMESTAMP
+WHERE id = $1
+RETURNING *;
