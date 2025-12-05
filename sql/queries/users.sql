@@ -68,3 +68,7 @@ SET
 status = 'deleted',
 updated_at = CURRENT_TIMESTAMP
 WHERE id = $1;
+
+-- name: GetDatausageById :one
+SELECT u.data_limit,u.data_usage FROM "user" as u
+WHERE u.id = $1;

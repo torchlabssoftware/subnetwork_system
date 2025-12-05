@@ -33,6 +33,7 @@ func (h *UserHandler) Routes() http.Handler {
 	r.Get("/{id}", h.getUserbyId)
 	r.Patch("/{id}", h.updateUser)
 	r.Delete("/{id}", h.deleteUser)
+	r.Get("/{id}/data-usage", h.getDataUsage)
 	return r
 }
 
@@ -273,9 +274,35 @@ func (h *UserHandler) deleteUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	res := struct {
-		Message string
+		Message string `json:"message"`
 	}{
 		Message: "user deleted",
+	}
+
+	functions.RespondwithJSON(w, http.StatusOK, res)
+}
+
+func (h *UserHandler) getDataUsage(w http.ResponseWriter, r *http.Request) {
+	//get the user id
+	userId := chi.URLParam(r, "id")
+	id, err := uuid.Parse(userId)
+	if err != nil {
+		functions.RespondwithError(w, http.StatusBadRequest, "invalid user id", err)
+		return
+	}
+
+	dataUsage, err := h.queries.GetDatausageById(r.Context(), id)
+	if err != nil {
+		functions.RespondwithError(w, http.StatusInternalServerError, "server error.cannot get data usage by id", err)
+		return
+	}
+
+	res := struct {
+		DataLimit int64 `json:"data_limit"`
+		DataUsage int64 `json:"data_usage"`
+	}{
+		DataLimit: dataUsage.DataLimit,
+		DataUsage: dataUsage.DataUsage,
 	}
 
 	functions.RespondwithJSON(w, http.StatusOK, res)

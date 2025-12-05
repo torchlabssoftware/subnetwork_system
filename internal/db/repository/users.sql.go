@@ -118,6 +118,23 @@ func (q *Queries) GetAllusers(ctx context.Context) ([]GetAllusersRow, error) {
 	return items, nil
 }
 
+const getDatausageById = `-- name: GetDatausageById :one
+SELECT u.data_limit,u.data_usage FROM "user" as u
+WHERE u.id = $1
+`
+
+type GetDatausageByIdRow struct {
+	DataLimit int64
+	DataUsage int64
+}
+
+func (q *Queries) GetDatausageById(ctx context.Context, id uuid.UUID) (GetDatausageByIdRow, error) {
+	row := q.db.QueryRowContext(ctx, getDatausageById, id)
+	var i GetDatausageByIdRow
+	err := row.Scan(&i.DataLimit, &i.DataUsage)
+	return i, err
+}
+
 const getUserbyId = `-- name: GetUserbyId :one
 SELECT 
     u.id,

@@ -13,6 +13,7 @@ import (
 type Querier interface {
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	GetAllusers(ctx context.Context) ([]GetAllusersRow, error)
+	GetDatausageById(ctx context.Context, id uuid.UUID) (GetDatausageByIdRow, error)
 	GetPoolsbyTags(ctx context.Context, dollar_1 []string) ([]uuid.UUID, error)
 	GetUserbyId(ctx context.Context, id uuid.UUID) (GetUserbyIdRow, error)
 	InsertUserIpwhitelist(ctx context.Context, arg InsertUserIpwhitelistParams) ([]UserIpWhitelist, error)
