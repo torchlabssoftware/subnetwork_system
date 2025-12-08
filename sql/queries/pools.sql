@@ -36,3 +36,4 @@ RETURNING *;
 DELETE FROM upstream as u
 where u.id = $1
 RETURNING *;
+

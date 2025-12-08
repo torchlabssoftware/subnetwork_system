@@ -9,6 +9,7 @@ import (
 	"github.com/go-chi/chi"
 	"github.com/torchlabssoftware/subnetwork_system/internal/db/repository"
 	functions "github.com/torchlabssoftware/subnetwork_system/internal/server/functions"
+	middleware "github.com/torchlabssoftware/subnetwork_system/internal/server/middleware"
 	models "github.com/torchlabssoftware/subnetwork_system/internal/server/models"
 )
 
@@ -26,6 +27,9 @@ func NewPoolHandler(queries *repository.Queries, db *sql.DB) *PoolHandler {
 
 func (p *PoolHandler) Routes() http.Handler {
 	r := chi.NewRouter()
+
+	r.Use(middleware.AdminAuthentication)
+
 	r.Get("/region", p.getRegions)
 	r.Post("/region", p.createRegion)
 	r.Delete("/region", p.DeleteRegion)
@@ -34,7 +38,9 @@ func (p *PoolHandler) Routes() http.Handler {
 	r.Delete("/country", p.DeleteCountry)
 	r.Get("/upstream", p.getUpstreams)
 	r.Post("/upstream", p.createUpstream)
-	r.Delete("/upstream", p.DeleteUpstream)
+	r.Delete("/upstream", p.deleteUpstream)
+
+	r.Post("/", p.createPool)
 	return r
 }
 
@@ -59,7 +65,7 @@ func (p *PoolHandler) getRegions(w http.ResponseWriter, r *http.Request) {
 		res = append(res, r)
 	}
 
-	functions.RespondwithJSON(w, http.StatusCreated, res)
+	functions.RespondwithJSON(w, http.StatusOK, res)
 }
 
 func (p *PoolHandler) createRegion(w http.ResponseWriter, r *http.Request) {
@@ -268,7 +274,7 @@ func (p *PoolHandler) createUpstream(w http.ResponseWriter, r *http.Request) {
 	functions.RespondwithJSON(w, http.StatusCreated, res)
 }
 
-func (p *PoolHandler) DeleteUpstream(w http.ResponseWriter, r *http.Request) {
+func (p *PoolHandler) deleteUpstream(w http.ResponseWriter, r *http.Request) {
 	var req models.DeleteUpstreamRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		functions.RespondwithError(w, http.StatusBadRequest, "err in request body", err)
@@ -288,4 +294,8 @@ func (p *PoolHandler) DeleteUpstream(w http.ResponseWriter, r *http.Request) {
 	}
 
 	functions.RespondwithJSON(w, http.StatusOK, res)
+}
+
+func (p *PoolHandler) createPool(w http.ResponseWriter, r *http.Request) {
+
 }

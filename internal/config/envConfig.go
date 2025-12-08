@@ -9,8 +9,9 @@ import (
 )
 
 type Config struct {
-	PORT  string
-	DBURL string
+	PORT    string
+	DBURL   string
+	API_KEY string
 }
 
 func Load() Config {
@@ -26,8 +27,9 @@ func Load() Config {
 	}
 
 	config := Config{
-		PORT:  getEnv("PORT", "8080"),
-		DBURL: getEnv("DB_URL", ""),
+		PORT:    getEnv("PORT", "8080"),
+		DBURL:   getEnv("DB_URL", ""),
+		API_KEY: getEnv("API_KEY", ""),
 	}
 
 	config.validate()
@@ -44,7 +46,8 @@ func getEnv(key, fallback string) string {
 
 func (c *Config) validate() {
 	required := map[string]string{
-		"DBURL": c.DBURL,
+		"DBURL":   c.DBURL,
+		"API_KEY": c.API_KEY,
 	}
 
 	for key, val := range required {
