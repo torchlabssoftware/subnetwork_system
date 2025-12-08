@@ -34,6 +34,9 @@ func NewRouter(pool *sql.DB) http.Handler {
 
 		h := server.NewUserHandler(q, pool)
 		r.Mount("/users", h.Routes())
+
+		p := server.NewPoolHandler(q, pool)
+		r.Mount("/pools", p.Routes())
 	})
 
 	return router

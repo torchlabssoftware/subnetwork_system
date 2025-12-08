@@ -6,8 +6,8 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 CREATE TABLE region (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL UNIQUE,
-    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE country (
@@ -59,6 +59,7 @@ CREATE TABLE user_pools (
 
 CREATE TABLE upstream (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    upstream_provider TEXT NOT NULL,
     format TEXT NOT NULL,
     port INT NOT NULL,
     domain TEXT NOT NULL,

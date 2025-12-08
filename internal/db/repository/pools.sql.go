@@ -7,29 +7,59 @@ package repository
 
 import (
 	"context"
-
-	"github.com/google/uuid"
-	"github.com/lib/pq"
 )
 
-const getPoolsbyTags = `-- name: GetPoolsbyTags :many
-SELECT pool.id FROM pool
-WHERE pool.tag = ANY($1::text[])
+const addRegion = `-- name: AddRegion :one
+INSERT INTO region(name)
+VALUES($1)
+RETURNING id, name, created_at, updated_at
 `
 
-func (q *Queries) GetPoolsbyTags(ctx context.Context, dollar_1 []string) ([]uuid.UUID, error) {
-	rows, err := q.db.QueryContext(ctx, getPoolsbyTags, pq.Array(dollar_1))
+func (q *Queries) AddRegion(ctx context.Context, name string) (Region, error) {
+	row := q.db.QueryRowContext(ctx, addRegion, name)
+	var i Region
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const deleteRegion = `-- name: DeleteRegion :exec
+DELETE FROM region as r
+where r.name = $1
+RETURNING id, name, created_at, updated_at
+`
+
+func (q *Queries) DeleteRegion(ctx context.Context, name string) error {
+	_, err := q.db.ExecContext(ctx, deleteRegion, name)
+	return err
+}
+
+const getRegions = `-- name: GetRegions :many
+SELECT id, name, created_at, updated_at FROM region
+`
+
+func (q *Queries) GetRegions(ctx context.Context) ([]Region, error) {
+	rows, err := q.db.QueryContext(ctx, getRegions)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []uuid.UUID
+	var items []Region
 	for rows.Next() {
-		var id uuid.UUID
-		if err := rows.Scan(&id); err != nil {
+		var i Region
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
 			return nil, err
 		}
-		items = append(items, id)
+		items = append(items, i)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err

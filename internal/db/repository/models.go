@@ -41,18 +41,19 @@ type PoolUpstreamWeight struct {
 type Region struct {
 	ID        uuid.UUID
 	Name      string
-	CreatedAt sql.NullTime
-	UpdatedAt sql.NullTime
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 type Upstream struct {
-	ID        uuid.UUID
-	Format    string
-	Port      int32
-	Domain    string
-	PoolID    uuid.UUID
-	CreatedAt sql.NullTime
-	UpdatedAt sql.NullTime
+	ID               uuid.UUID
+	UpstreamProvider string
+	Format           string
+	Port             int32
+	Domain           string
+	PoolID           uuid.UUID
+	CreatedAt        sql.NullTime
+	UpdatedAt        sql.NullTime
 }
 
 type User struct {
