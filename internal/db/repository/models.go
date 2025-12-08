@@ -16,8 +16,8 @@ type Country struct {
 	Name      string
 	Code      string
 	RegionID  uuid.UUID
-	CreatedAt sql.NullTime
-	UpdatedAt sql.NullTime
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 type Pool struct {

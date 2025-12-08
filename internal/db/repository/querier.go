@@ -11,13 +11,16 @@ import (
 )
 
 type Querier interface {
+	AddCountry(ctx context.Context, arg AddCountryParams) (Country, error)
 	AddRegion(ctx context.Context, name string) (Region, error)
 	AddUserPoolsByPoolTags(ctx context.Context, arg AddUserPoolsByPoolTagsParams) (AddUserPoolsByPoolTagsRow, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
+	DeleteCountry(ctx context.Context, name string) error
 	DeleteRegion(ctx context.Context, name string) error
 	DeleteUserIpwhitelist(ctx context.Context, arg DeleteUserIpwhitelistParams) error
 	DeleteUserPoolsByTags(ctx context.Context, arg DeleteUserPoolsByTagsParams) error
 	GetAllusers(ctx context.Context) ([]GetAllusersRow, error)
+	GetCountries(ctx context.Context) ([]Country, error)
 	GetDatausageById(ctx context.Context, id uuid.UUID) (GetDatausageByIdRow, error)
 	GetRegions(ctx context.Context) ([]Region, error)
 	GetUserIpwhitelistByUserId(ctx context.Context, id uuid.UUID) (GetUserIpwhitelistByUserIdRow, error)

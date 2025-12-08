@@ -3,6 +3,7 @@ package server
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/go-chi/chi"
@@ -28,6 +29,9 @@ func (p *PoolHandler) Routes() http.Handler {
 	r.Get("/region", p.getRegions)
 	r.Post("/region", p.createRegion)
 	r.Delete("/region", p.DeleteRegion)
+	r.Get("/country", p.getcountries)
+	r.Post("/country", p.createCountry)
+	r.Delete("/country", p.DeleteCountry)
 	return r
 }
 
@@ -39,7 +43,7 @@ func (p *PoolHandler) getRegions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	res := make([]models.GetRegionResponce, len(regions))
+	res := []models.GetRegionResponce{}
 
 	for _, region := range regions {
 		r := models.GetRegionResponce{
@@ -62,7 +66,12 @@ func (p *PoolHandler) createRegion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	region, err := p.Queries.AddRegion(r.Context(), req.Name)
+	if req.Name != nil && *req.Name != "" {
+		functions.RespondwithError(w, http.StatusBadRequest, "add Request name", fmt.Errorf("no region name"))
+		return
+	}
+
+	region, err := p.Queries.AddRegion(r.Context(), *req.Name)
 	if err != nil {
 		functions.RespondwithError(w, http.StatusBadRequest, "server error", err)
 		return
@@ -86,6 +95,90 @@ func (p *PoolHandler) DeleteRegion(w http.ResponseWriter, r *http.Request) {
 	}
 
 	err := p.Queries.DeleteRegion(r.Context(), req.Name)
+	if err != nil {
+		functions.RespondwithError(w, http.StatusBadRequest, "server error", err)
+		return
+	}
+
+	res := struct {
+		Message string `json:"message"`
+	}{
+		Message: "deleted",
+	}
+
+	functions.RespondwithJSON(w, http.StatusOK, res)
+}
+
+func (p *PoolHandler) getcountries(w http.ResponseWriter, r *http.Request) {
+
+	countries, err := p.Queries.GetCountries(r.Context())
+	if err != nil {
+		functions.RespondwithError(w, http.StatusBadRequest, "server error", err)
+		return
+	}
+
+	res := []models.GetCountryResponce{}
+
+	for _, country := range countries {
+		r := models.GetCountryResponce{
+			Id:        country.ID,
+			Name:      country.Name,
+			Code:      country.Code,
+			RegionId:  country.RegionID,
+			CreatedAt: country.CreatedAt,
+			UpdatedAt: country.UpdatedAt,
+		}
+
+		res = append(res, r)
+	}
+
+	functions.RespondwithJSON(w, http.StatusCreated, res)
+}
+
+func (p *PoolHandler) createCountry(w http.ResponseWriter, r *http.Request) {
+	var req models.CreateCountryRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		functions.RespondwithError(w, http.StatusBadRequest, "err in request body", err)
+		return
+	}
+
+	if (req.Name == nil && *req.Name == "") || (req.Code == nil && *req.Code == "") || req.RegionId == nil {
+		functions.RespondwithError(w, http.StatusBadRequest, "err in request body", fmt.Errorf("err in request body"))
+		return
+	}
+
+	args := repository.AddCountryParams{
+		Name:     *req.Name,
+		Code:     *req.Code,
+		RegionID: *req.RegionId,
+	}
+
+	country, err := p.Queries.AddCountry(r.Context(), args)
+	if err != nil {
+		functions.RespondwithError(w, http.StatusBadRequest, "server error", err)
+		return
+	}
+
+	res := models.CreateCountryResponce{
+		Id:        country.ID,
+		Name:      country.Name,
+		Code:      country.Code,
+		RegionId:  country.RegionID,
+		CreatedAt: country.CreatedAt,
+		UpdatedAt: country.UpdatedAt,
+	}
+
+	functions.RespondwithJSON(w, http.StatusCreated, res)
+}
+
+func (p *PoolHandler) DeleteCountry(w http.ResponseWriter, r *http.Request) {
+	var req models.DeleteCountryRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		functions.RespondwithError(w, http.StatusBadRequest, "err in request body", err)
+		return
+	}
+
+	err := p.Queries.DeleteCountry(r.Context(), req.Name)
 	if err != nil {
 		functions.RespondwithError(w, http.StatusBadRequest, "server error", err)
 		return

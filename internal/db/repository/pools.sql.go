@@ -7,7 +7,35 @@ package repository
 
 import (
 	"context"
+
+	"github.com/google/uuid"
 )
+
+const addCountry = `-- name: AddCountry :one
+INSERT INTO country(name,code,region_id)
+VALUES($1,$2,$3)
+RETURNING id, name, code, region_id, created_at, updated_at
+`
+
+type AddCountryParams struct {
+	Name     string
+	Code     string
+	RegionID uuid.UUID
+}
+
+func (q *Queries) AddCountry(ctx context.Context, arg AddCountryParams) (Country, error) {
+	row := q.db.QueryRowContext(ctx, addCountry, arg.Name, arg.Code, arg.RegionID)
+	var i Country
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Code,
+		&i.RegionID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
 
 const addRegion = `-- name: AddRegion :one
 INSERT INTO region(name)
@@ -27,6 +55,17 @@ func (q *Queries) AddRegion(ctx context.Context, name string) (Region, error) {
 	return i, err
 }
 
+const deleteCountry = `-- name: DeleteCountry :exec
+DELETE FROM country as c
+where c.name = $1
+RETURNING id, name, code, region_id, created_at, updated_at
+`
+
+func (q *Queries) DeleteCountry(ctx context.Context, name string) error {
+	_, err := q.db.ExecContext(ctx, deleteCountry, name)
+	return err
+}
+
 const deleteRegion = `-- name: DeleteRegion :exec
 DELETE FROM region as r
 where r.name = $1
@@ -36,6 +75,40 @@ RETURNING id, name, created_at, updated_at
 func (q *Queries) DeleteRegion(ctx context.Context, name string) error {
 	_, err := q.db.ExecContext(ctx, deleteRegion, name)
 	return err
+}
+
+const getCountries = `-- name: GetCountries :many
+SELECT id, name, code, region_id, created_at, updated_at FROM country
+`
+
+func (q *Queries) GetCountries(ctx context.Context) ([]Country, error) {
+	rows, err := q.db.QueryContext(ctx, getCountries)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Country
+	for rows.Next() {
+		var i Country
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Code,
+			&i.RegionID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getRegions = `-- name: GetRegions :many
