@@ -75,7 +75,7 @@ func (p *PoolHandler) createRegion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Name != nil && *req.Name != "" {
+	if req.Name == nil && *req.Name == "" {
 		functions.RespondwithError(w, http.StatusBadRequest, "add Request name", fmt.Errorf("no region name"))
 		return
 	}
