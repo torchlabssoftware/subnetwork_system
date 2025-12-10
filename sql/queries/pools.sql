@@ -86,3 +86,7 @@ SET
     updated_at = NOW()
 WHERE tag = $1
 RETURNING *;
+
+-- name: DeletePool :exec
+DELETE FROM pool
+WHERE tag = $1;

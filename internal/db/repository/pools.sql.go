@@ -103,6 +103,16 @@ func (q *Queries) DeleteCountry(ctx context.Context, name string) error {
 	return err
 }
 
+const deletePool = `-- name: DeletePool :exec
+DELETE FROM pool
+WHERE tag = $1
+`
+
+func (q *Queries) DeletePool(ctx context.Context, tag string) error {
+	_, err := q.db.ExecContext(ctx, deletePool, tag)
+	return err
+}
+
 const deleteRegion = `-- name: DeleteRegion :exec
 DELETE FROM region as r
 where r.name = $1

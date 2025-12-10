@@ -45,6 +45,7 @@ func (p *PoolHandler) Routes() http.Handler {
 	r.Get("/", p.getPools)
 	r.Get("/{tag}", p.getPoolByTag)
 	r.Put("/{tag}", p.updatePool)
+	r.Delete("/{tag}", p.deletePool)
 	return r
 }
 
@@ -540,6 +541,28 @@ func (p *PoolHandler) updatePool(w http.ResponseWriter, r *http.Request) {
 		Port:      &updatedPool.Port,
 		CreatedAt: updatedPool.CreatedAt,
 		UpdatedAt: updatedPool.UpdatedAt,
+	}
+
+	functions.RespondwithJSON(w, http.StatusOK, res)
+}
+
+func (p *PoolHandler) deletePool(w http.ResponseWriter, r *http.Request) {
+	tag := chi.URLParam(r, "tag")
+	if tag == "" {
+		functions.RespondwithError(w, http.StatusBadRequest, "Tag is required", fmt.Errorf("missing tag param"))
+		return
+	}
+
+	err := p.Queries.DeletePool(r.Context(), tag)
+	if err != nil {
+		functions.RespondwithError(w, http.StatusInternalServerError, "Failed to delete pool", err)
+		return
+	}
+
+	res := struct {
+		Message string `json:"message"`
+	}{
+		Message: "deleted",
 	}
 
 	functions.RespondwithJSON(w, http.StatusOK, res)
