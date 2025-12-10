@@ -39,6 +39,34 @@ func (q *Queries) AddCountry(ctx context.Context, arg AddCountryParams) (Country
 	return i, err
 }
 
+const addPoolUpstreamWeight = `-- name: AddPoolUpstreamWeight :one
+INSERT INTO pool_upstream_weight (pool_id, upstream_id, weight)
+VALUES (
+    (SELECT p.id FROM pool p WHERE p.tag = $1),
+    (SELECT u.id FROM upstream u WHERE u.tag = $2),
+    $3
+)
+RETURNING id, pool_id, upstream_id, weight
+`
+
+type AddPoolUpstreamWeightParams struct {
+	Tag    string
+	Tag_2  string
+	Weight int32
+}
+
+func (q *Queries) AddPoolUpstreamWeight(ctx context.Context, arg AddPoolUpstreamWeightParams) (PoolUpstreamWeight, error) {
+	row := q.db.QueryRowContext(ctx, addPoolUpstreamWeight, arg.Tag, arg.Tag_2, arg.Weight)
+	var i PoolUpstreamWeight
+	err := row.Scan(
+		&i.ID,
+		&i.PoolID,
+		&i.UpstreamID,
+		&i.Weight,
+	)
+	return i, err
+}
+
 const addRegion = `-- name: AddRegion :one
 INSERT INTO region(name)
 VALUES($1)
@@ -110,6 +138,22 @@ WHERE tag = $1
 
 func (q *Queries) DeletePool(ctx context.Context, tag string) error {
 	_, err := q.db.ExecContext(ctx, deletePool, tag)
+	return err
+}
+
+const deletePoolUpstreamWeight = `-- name: DeletePoolUpstreamWeight :exec
+DELETE FROM pool_upstream_weight
+WHERE pool_id = (SELECT p.id FROM pool p WHERE p.tag = $1)
+  AND upstream_id = (SELECT u.id FROM upstream u WHERE u.tag = $2)
+`
+
+type DeletePoolUpstreamWeightParams struct {
+	Tag   string
+	Tag_2 string
+}
+
+func (q *Queries) DeletePoolUpstreamWeight(ctx context.Context, arg DeletePoolUpstreamWeightParams) error {
+	_, err := q.db.ExecContext(ctx, deletePoolUpstreamWeight, arg.Tag, arg.Tag_2)
 	return err
 }
 

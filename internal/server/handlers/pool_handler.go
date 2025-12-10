@@ -46,6 +46,8 @@ func (p *PoolHandler) Routes() http.Handler {
 	r.Get("/{tag}", p.getPoolByTag)
 	r.Put("/{tag}", p.updatePool)
 	r.Delete("/{tag}", p.deletePool)
+	r.Post("/weight", p.addPoolUpstreamWeight)
+	r.Delete("/weight", p.deletePoolUpstreamWeight)
 	return r
 }
 
@@ -556,6 +558,71 @@ func (p *PoolHandler) deletePool(w http.ResponseWriter, r *http.Request) {
 	err := p.Queries.DeletePool(r.Context(), tag)
 	if err != nil {
 		functions.RespondwithError(w, http.StatusInternalServerError, "Failed to delete pool", err)
+		return
+	}
+
+	res := struct {
+		Message string `json:"message"`
+	}{
+		Message: "deleted",
+	}
+
+	functions.RespondwithJSON(w, http.StatusOK, res)
+}
+
+func (p *PoolHandler) addPoolUpstreamWeight(w http.ResponseWriter, r *http.Request) {
+	var req models.AddPoolUpstreamWeightRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		functions.RespondwithError(w, http.StatusBadRequest, "Invalid request body", err)
+		return
+	}
+
+	if req.PoolTag == "" || req.UpstreamTag == "" || req.Weight == 0 {
+		functions.RespondwithError(w, http.StatusBadRequest, "Pool Tag, Upstream Tag and Weight are required", fmt.Errorf("missing fields"))
+		return
+	}
+
+	args := repository.AddPoolUpstreamWeightParams{
+		Tag:    req.PoolTag,
+		Tag_2:  req.UpstreamTag,
+		Weight: req.Weight,
+	}
+
+	_, err := p.Queries.AddPoolUpstreamWeight(r.Context(), args)
+	if err != nil {
+		functions.RespondwithError(w, http.StatusInternalServerError, "Failed to add upstream weight", err)
+		return
+	}
+
+	res := struct {
+		Message string `json:"message"`
+	}{
+		Message: "added",
+	}
+
+	functions.RespondwithJSON(w, http.StatusCreated, res)
+}
+
+func (p *PoolHandler) deletePoolUpstreamWeight(w http.ResponseWriter, r *http.Request) {
+	var req models.DeletePoolUpstreamWeightRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		functions.RespondwithError(w, http.StatusBadRequest, "Invalid request body", err)
+		return
+	}
+
+	if req.PoolTag == "" || req.UpstreamTag == "" {
+		functions.RespondwithError(w, http.StatusBadRequest, "Pool Tag and Upstream Tag are required", fmt.Errorf("missing fields"))
+		return
+	}
+
+	args := repository.DeletePoolUpstreamWeightParams{
+		Tag:   req.PoolTag,
+		Tag_2: req.UpstreamTag,
+	}
+
+	err := p.Queries.DeletePoolUpstreamWeight(r.Context(), args)
+	if err != nil {
+		functions.RespondwithError(w, http.StatusInternalServerError, "Failed to delete upstream weight", err)
 		return
 	}
 

@@ -90,3 +90,17 @@ RETURNING *;
 -- name: DeletePool :exec
 DELETE FROM pool
 WHERE tag = $1;
+
+-- name: AddPoolUpstreamWeight :one
+INSERT INTO pool_upstream_weight (pool_id, upstream_id, weight)
+VALUES (
+    (SELECT p.id FROM pool p WHERE p.tag = $1),
+    (SELECT u.id FROM upstream u WHERE u.tag = $2),
+    $3
+)
+RETURNING *;
+
+-- name: DeletePoolUpstreamWeight :exec
+DELETE FROM pool_upstream_weight
+WHERE pool_id = (SELECT p.id FROM pool p WHERE p.tag = $1)
+  AND upstream_id = (SELECT u.id FROM upstream u WHERE u.tag = $2);

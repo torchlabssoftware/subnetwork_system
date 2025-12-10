@@ -12,12 +12,14 @@ import (
 
 type Querier interface {
 	AddCountry(ctx context.Context, arg AddCountryParams) (Country, error)
+	AddPoolUpstreamWeight(ctx context.Context, arg AddPoolUpstreamWeightParams) (PoolUpstreamWeight, error)
 	AddRegion(ctx context.Context, name string) (Region, error)
 	AddUpstream(ctx context.Context, arg AddUpstreamParams) (Upstream, error)
 	AddUserPoolsByPoolTags(ctx context.Context, arg AddUserPoolsByPoolTagsParams) (AddUserPoolsByPoolTagsRow, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	DeleteCountry(ctx context.Context, name string) error
 	DeletePool(ctx context.Context, tag string) error
+	DeletePoolUpstreamWeight(ctx context.Context, arg DeletePoolUpstreamWeightParams) error
 	DeleteRegion(ctx context.Context, name string) error
 	DeleteUpstream(ctx context.Context, id uuid.UUID) error
 	DeleteUserIpwhitelist(ctx context.Context, arg DeleteUserIpwhitelistParams) error

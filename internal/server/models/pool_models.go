@@ -143,3 +143,14 @@ type UpdatePoolRequest struct {
 	Subdomain *string    `json:"subdomain"`
 	Port      *int32     `json:"port"`
 }
+
+type AddPoolUpstreamWeightRequest struct {
+	PoolTag     string `json:"pool_tag"`
+	UpstreamTag string `json:"upstream_tag"`
+	Weight      int32  `json:"weight"`
+}
+
+type DeletePoolUpstreamWeightRequest struct {
+	PoolTag     string `json:"pool_tag"`
+	UpstreamTag string `json:"upstream_tag"`
+}
