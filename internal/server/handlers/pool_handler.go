@@ -44,6 +44,7 @@ func (p *PoolHandler) Routes() http.Handler {
 	r.Post("/", p.createPool)
 	r.Get("/", p.getPools)
 	r.Get("/{tag}", p.getPoolByTag)
+	r.Put("/{tag}", p.updatePool)
 	return r
 }
 
@@ -477,4 +478,69 @@ func (p *PoolHandler) getPoolByTag(w http.ResponseWriter, r *http.Request) {
 	}
 
 	functions.RespondwithJSON(w, http.StatusOK, poolResponse)
+}
+
+func (p *PoolHandler) updatePool(w http.ResponseWriter, r *http.Request) {
+	tagStr := chi.URLParam(r, "tag")
+	if tagStr == "" {
+		functions.RespondwithError(w, http.StatusBadRequest, "Pool Tag is required", fmt.Errorf("missing tag param"))
+		return
+	}
+
+	var req models.UpdatePoolRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		functions.RespondwithError(w, http.StatusBadRequest, "Invalid request body", err)
+		return
+	}
+
+	name := sql.NullString{Valid: false}
+	if req.Name != nil {
+		name = sql.NullString{String: *req.Name, Valid: true}
+	}
+
+	regionId := uuid.NullUUID{Valid: false}
+	if req.RegionId != nil {
+		regionId = uuid.NullUUID{UUID: *req.RegionId, Valid: true}
+	}
+
+	subdomain := sql.NullString{Valid: false}
+	if req.Subdomain != nil {
+		subdomain = sql.NullString{String: *req.Subdomain, Valid: true}
+	}
+
+	port := sql.NullInt32{Valid: false}
+	if req.Port != nil {
+		port = sql.NullInt32{Int32: *req.Port, Valid: true}
+	}
+
+	args := repository.UpdatePoolParams{
+		Tag:       tagStr,
+		Name:      name,
+		RegionID:  regionId,
+		Subdomain: subdomain,
+		Port:      port,
+	}
+
+	updatedPool, err := p.Queries.UpdatePool(r.Context(), args)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			functions.RespondwithError(w, http.StatusNotFound, "Pool not found", err)
+			return
+		}
+		functions.RespondwithError(w, http.StatusInternalServerError, "Failed to update pool", err)
+		return
+	}
+
+	res := models.CreatePoolResponce{
+		Id:        updatedPool.ID,
+		Name:      &updatedPool.Name,
+		Tag:       &updatedPool.Tag,
+		RegionId:  &updatedPool.RegionID,
+		Subdomain: &updatedPool.Subdomain,
+		Port:      &updatedPool.Port,
+		CreatedAt: updatedPool.CreatedAt,
+		UpdatedAt: updatedPool.UpdatedAt,
+	}
+
+	functions.RespondwithJSON(w, http.StatusOK, res)
 }

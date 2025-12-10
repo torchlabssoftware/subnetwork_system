@@ -36,6 +36,7 @@ type Querier interface {
 	InsetPool(ctx context.Context, arg InsetPoolParams) (Pool, error)
 	ListPoolsWithUpstreams(ctx context.Context) ([]ListPoolsWithUpstreamsRow, error)
 	SoftDeleteUser(ctx context.Context, id uuid.UUID) error
+	UpdatePool(ctx context.Context, arg UpdatePoolParams) (Pool, error)
 	UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error)
 }
 

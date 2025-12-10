@@ -105,20 +105,20 @@ type CreateUpstreamWeightRequest struct {
 }
 
 type CreateUpstreamWeightResponce struct {
-	UpstreamTag string `json:"upstream_tag"`
-	Weight      int32  `json:"weight"`
+	UpstreamTag string `json:"upstream_tag,omitempty"`
+	Weight      int32  `json:"weight,omitempty"`
 }
 
 type CreatePoolResponce struct {
-	Id        uuid.UUID                       `json:"id"`
-	Name      *string                         `json:"name"`
-	Tag       *string                         `json:"tag"`
-	RegionId  *uuid.UUID                      `json:"region_id"`
-	Subdomain *string                         `json:"subdomain"`
-	Port      *int32                          `json:"port"`
-	UpStreams *[]CreateUpstreamWeightResponce `json:"upstreams"`
-	CreatedAt time.Time                       `json:"created_at"`
-	UpdatedAt time.Time                       `json:"updated_at "`
+	Id        uuid.UUID                       `json:"id,omitempty"`
+	Name      *string                         `json:"name,omitempty"`
+	Tag       *string                         `json:"tag,omitempty"`
+	RegionId  *uuid.UUID                      `json:"region_id,omitempty"`
+	Subdomain *string                         `json:"subdomain,omitempty"`
+	Port      *int32                          `json:"port,omitempty"`
+	UpStreams *[]CreateUpstreamWeightResponce `json:"upstreams,omitempty"`
+	CreatedAt time.Time                       `json:"created_at,omitempty"`
+	UpdatedAt time.Time                       `json:"updated_at,omitempty"`
 }
 
 type PoolUpstream struct {
@@ -129,10 +129,17 @@ type PoolUpstream struct {
 }
 
 type GetPoolsResponse struct {
-	Id        uuid.UUID      `json:"id"`
-	Name      string         `json:"name"`
-	Tag       string         `json:"tag"`
-	Subdomain string         `json:"subdomain"`
-	Port      int32          `json:"port"`
-	Upstreams []PoolUpstream `json:"upstreams"`
+	Id        uuid.UUID      `json:"id,omitempty"`
+	Name      string         `json:"name,omitempty"`
+	Tag       string         `json:"tag,omitempty"`
+	Subdomain string         `json:"subdomain,omitempty"`
+	Port      int32          `json:"port,omitempty"`
+	Upstreams []PoolUpstream `json:"upstreams,omitempty"`
+}
+
+type UpdatePoolRequest struct {
+	Name      *string    `json:"name"`
+	RegionId  *uuid.UUID `json:"region_id"`
+	Subdomain *string    `json:"subdomain"`
+	Port      *int32     `json:"port"`
 }

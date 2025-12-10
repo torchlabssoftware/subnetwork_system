@@ -75,3 +75,14 @@ FROM pool p
 LEFT JOIN pool_upstream_weight puw ON p.id = puw.pool_id
 LEFT JOIN upstream u ON puw.upstream_id = u.id
 WHERE p.tag = $1;
+
+-- name: UpdatePool :one
+UPDATE pool
+SET 
+    name = COALESCE(sqlc.narg('name'), name),
+    region_id = COALESCE(sqlc.narg('region_id'), region_id),
+    subdomain = COALESCE(sqlc.narg('subdomain'), subdomain),
+    port = COALESCE(sqlc.narg('port'), port),
+    updated_at = NOW()
+WHERE tag = $1
+RETURNING *;

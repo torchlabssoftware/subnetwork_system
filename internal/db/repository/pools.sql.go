@@ -423,3 +423,45 @@ func (q *Queries) ListPoolsWithUpstreams(ctx context.Context) ([]ListPoolsWithUp
 	}
 	return items, nil
 }
+
+const updatePool = `-- name: UpdatePool :one
+UPDATE pool
+SET 
+    name = COALESCE($2, name),
+    region_id = COALESCE($3, region_id),
+    subdomain = COALESCE($4, subdomain),
+    port = COALESCE($5, port),
+    updated_at = NOW()
+WHERE tag = $1
+RETURNING id, name, tag, region_id, subdomain, port, created_at, updated_at
+`
+
+type UpdatePoolParams struct {
+	Tag       string
+	Name      sql.NullString
+	RegionID  uuid.NullUUID
+	Subdomain sql.NullString
+	Port      sql.NullInt32
+}
+
+func (q *Queries) UpdatePool(ctx context.Context, arg UpdatePoolParams) (Pool, error) {
+	row := q.db.QueryRowContext(ctx, updatePool,
+		arg.Tag,
+		arg.Name,
+		arg.RegionID,
+		arg.Subdomain,
+		arg.Port,
+	)
+	var i Pool
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Tag,
+		&i.RegionID,
+		&i.Subdomain,
+		&i.Port,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
