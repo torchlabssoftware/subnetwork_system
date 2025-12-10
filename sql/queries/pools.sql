@@ -8,8 +8,7 @@ RETURNING *;
 
 -- name: DeleteRegion :exec
 DELETE FROM region as r
-where r.name = $1
-RETURNING *;
+where r.name = $1;
 
 -- name: GetCountries :many
 SELECT * FROM country;
@@ -21,19 +20,36 @@ RETURNING *;
 
 -- name: DeleteCountry :exec
 DELETE FROM country as c
-where c.name = $1
-RETURNING *;
+where c.name = $1;
 
 -- name: GetUpstreams :many
 SELECT * FROM upstream;
 
 -- name: AddUpstream :one
-INSERT INTO upstream(upstream_provider,format,port,domain,pool_id)
+INSERT INTO upstream(tag,upstream_provider,format,port,domain)
 VALUES($1,$2,$3,$4,$5)
 RETURNING *;
 
 -- name: DeleteUpstream :exec
 DELETE FROM upstream as u
-where u.id = $1
+where u.id = $1;
+
+-- name: InsetPool :one
+INSERT INTO pool(name,tag,region_id,subdomain,port)
+VALUES($1,$2,$3,$4,$5)
 RETURNING *;
+
+-- name: InsertPoolUpstreamWeight :many
+INSERT INTO pool_upstream_weight (pool_id, weight, upstream_id)
+SELECT 
+    $1,           -- pool_id (constant)
+    T.w,          -- weight (unnested)
+    U.id          -- upstream_id (matched by tag)
+FROM 
+    upstream AS U
+JOIN 
+    ROWS FROM (UNNEST($2::INT[]), UNNEST($3::text[])) AS T(w, t) 
+        ON U.tag = T.t -- Join the parallel (weight, tag) set to upstream based on tag
+RETURNING 
+    *;
 

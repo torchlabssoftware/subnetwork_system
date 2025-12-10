@@ -215,13 +215,13 @@ func (p *PoolHandler) getUpstreams(w http.ResponseWriter, r *http.Request) {
 	for _, upstream := range upstreams {
 		r := models.GetUpstreamResponce{
 			Id:               upstream.ID,
+			Tag:              upstream.Tag,
 			UpstreamProvider: upstream.UpstreamProvider,
 			Format:           upstream.Format,
 			Domain:           upstream.Domain,
 			Port:             int(upstream.Port),
-			PoolId:           upstream.PoolID,
-			CreatedAt:        upstream.CreatedAt.Time,
-			UpdatedAt:        upstream.UpdatedAt.Time,
+			CreatedAt:        upstream.CreatedAt,
+			UpdatedAt:        upstream.UpdatedAt,
 		}
 
 		res = append(res, r)
@@ -239,19 +239,19 @@ func (p *PoolHandler) createUpstream(w http.ResponseWriter, r *http.Request) {
 
 	if (req.UpstreamProvider == nil && *req.UpstreamProvider == "") ||
 		(req.Format == nil && *req.Format == "") ||
+		(req.Tag == nil && *req.Tag == "") ||
 		req.Port == nil ||
-		(req.Domain == nil && *req.Domain == "") ||
-		(req.PoolId == nil) {
+		(req.Domain == nil && *req.Domain == "") {
 		functions.RespondwithError(w, http.StatusBadRequest, "err in request body", fmt.Errorf("err in request body"))
 		return
 	}
 
 	args := repository.AddUpstreamParams{
+		Tag:              *req.Tag,
 		UpstreamProvider: *req.UpstreamProvider,
 		Format:           *req.Format,
 		Port:             int32(*req.Port),
 		Domain:           *req.Domain,
-		PoolID:           *req.PoolId,
 	}
 
 	upstream, err := p.Queries.AddUpstream(r.Context(), args)
@@ -262,13 +262,13 @@ func (p *PoolHandler) createUpstream(w http.ResponseWriter, r *http.Request) {
 
 	res := models.CreateUpstreamResponce{
 		Id:               upstream.ID,
+		Tag:              upstream.Tag,
 		UpstreamProvider: upstream.UpstreamProvider,
 		Format:           upstream.Format,
 		Port:             int(upstream.Port),
 		Domain:           upstream.Domain,
-		PoolId:           upstream.PoolID,
-		CreatedAt:        upstream.CreatedAt.Time,
-		UpdatedAt:        upstream.UpdatedAt.Time,
+		CreatedAt:        upstream.CreatedAt,
+		UpdatedAt:        upstream.UpdatedAt,
 	}
 
 	functions.RespondwithJSON(w, http.StatusCreated, res)
@@ -297,5 +297,90 @@ func (p *PoolHandler) deleteUpstream(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *PoolHandler) createPool(w http.ResponseWriter, r *http.Request) {
+
+	//begin transaction
+	ctx, err := p.DB.Begin()
+	if err != nil {
+		functions.RespondwithError(w, http.StatusInternalServerError, "failed to create user", err)
+		return
+	}
+	defer func() {
+		_ = ctx.Rollback()
+	}()
+
+	qtx := p.Queries.WithTx(ctx)
+
+	var req models.CreatePoolRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		functions.RespondwithError(w, http.StatusBadRequest, "err in request body", err)
+		return
+	}
+
+	if (req.Name == nil && *req.Name == "") || (req.Tag == nil && *req.Tag == "") || req.RegionId == nil || (req.Subdomain == nil && *req.Subdomain == "") || (req.Port == nil) || req.UpStreams == nil {
+		functions.RespondwithError(w, http.StatusBadRequest, "err in request body", fmt.Errorf("err in request body"))
+		return
+	}
+
+	args := repository.InsetPoolParams{
+		Name:      *req.Name,
+		Tag:       *req.Tag,
+		RegionID:  *req.RegionId,
+		Subdomain: *req.Subdomain,
+		Port:      *req.Port,
+	}
+
+	pool, err := qtx.InsetPool(r.Context(), args)
+	if err != nil {
+		functions.RespondwithError(w, http.StatusBadRequest, "server error", err)
+		return
+	}
+
+	weights := []int32{}
+	upstreamTags := []string{}
+
+	for _, upstreams := range *req.UpStreams {
+		weights = append(weights, *upstreams.Weight)
+		upstreamTags = append(upstreamTags, *upstreams.UpstreamTag)
+	}
+
+	weightArgs := repository.InsertPoolUpstreamWeightParams{
+		PoolID:  pool.ID,
+		Column2: weights,
+		Column3: upstreamTags,
+	}
+
+	poolUpstreamWeights, err := qtx.InsertPoolUpstreamWeight(r.Context(), weightArgs)
+	if err != nil {
+		functions.RespondwithError(w, http.StatusBadRequest, "server error", err)
+		return
+	}
+
+	if err := ctx.Commit(); err != nil {
+		functions.RespondwithError(w, http.StatusInternalServerError, "failed to create pool", err)
+		return
+	}
+
+	upstreamsRes := []models.CreateUpstreamWeightResponce{}
+
+	for i, puw := range poolUpstreamWeights {
+		upstreamRes := models.CreateUpstreamWeightResponce{
+			UpstreamTag: upstreamTags[i],
+			Weight:      puw.Weight,
+		}
+		upstreamsRes = append(upstreamsRes, upstreamRes)
+	}
+	res := models.CreatePoolResponce{
+		Id:        pool.ID,
+		Name:      &pool.Name,
+		Tag:       &pool.Tag,
+		RegionId:  &pool.RegionID,
+		Subdomain: &pool.Subdomain,
+		Port:      &pool.Port,
+		UpStreams: &upstreamsRes,
+		CreatedAt: pool.CreatedAt,
+		UpdatedAt: pool.UpdatedAt,
+	}
+
+	functions.RespondwithJSON(w, http.StatusCreated, res)
 
 }

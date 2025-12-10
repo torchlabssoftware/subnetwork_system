@@ -47,13 +47,13 @@ type Region struct {
 
 type Upstream struct {
 	ID               uuid.UUID
+	Tag              string
 	UpstreamProvider string
 	Format           string
 	Port             int32
 	Domain           string
-	PoolID           uuid.UUID
-	CreatedAt        sql.NullTime
-	UpdatedAt        sql.NullTime
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
 }
 
 type User struct {
