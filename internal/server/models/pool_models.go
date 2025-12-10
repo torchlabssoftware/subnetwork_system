@@ -120,3 +120,19 @@ type CreatePoolResponce struct {
 	CreatedAt time.Time                       `json:"created_at"`
 	UpdatedAt time.Time                       `json:"updated_at "`
 }
+
+type PoolUpstream struct {
+	Tag    string `json:"tag"`
+	Format string `json:"format"`
+	Port   int32  `json:"port"`
+	Domain string `json:"domain"`
+}
+
+type GetPoolsResponse struct {
+	Id        uuid.UUID      `json:"id"`
+	Name      string         `json:"name"`
+	Tag       string         `json:"tag"`
+	Subdomain string         `json:"subdomain"`
+	Port      int32          `json:"port"`
+	Upstreams []PoolUpstream `json:"upstreams"`
+}

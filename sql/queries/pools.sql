@@ -41,15 +41,21 @@ RETURNING *;
 
 -- name: InsertPoolUpstreamWeight :many
 INSERT INTO pool_upstream_weight (pool_id, weight, upstream_id)
-SELECT 
-    $1,           -- pool_id (constant)
-    T.w,          -- weight (unnested)
-    U.id          -- upstream_id (matched by tag)
-FROM 
-    upstream AS U
-JOIN 
-    ROWS FROM (UNNEST($2::INT[]), UNNEST($3::text[])) AS T(w, t) 
-        ON U.tag = T.t -- Join the parallel (weight, tag) set to upstream based on tag
-RETURNING 
-    *;
+SELECT $1,T.w,U.id FROM upstream AS U JOIN ROWS FROM (UNNEST($2::INT[]), UNNEST($3::text[])) AS T(w, t) ON U.tag = T.t 
+RETURNING *;
 
+
+-- name: ListPoolsWithUpstreams :many
+SELECT 
+    p.id AS pool_id,
+    p.name AS pool_name,
+    p.tag AS pool_tag,
+    p.subdomain AS pool_subdomain,
+    p.port AS pool_port,
+    u.tag AS upstream_tag,
+    u.format AS upstream_format,
+    u.port AS upstream_port,
+    u.domain AS upstream_domain
+FROM pool p
+LEFT JOIN pool_upstream_weight puw ON p.id = puw.pool_id
+LEFT JOIN upstream u ON puw.upstream_id = u.id;

@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi"
+	"github.com/google/uuid"
 	"github.com/torchlabssoftware/subnetwork_system/internal/db/repository"
 	functions "github.com/torchlabssoftware/subnetwork_system/internal/server/functions"
 	middleware "github.com/torchlabssoftware/subnetwork_system/internal/server/middleware"
@@ -41,6 +42,7 @@ func (p *PoolHandler) Routes() http.Handler {
 	r.Delete("/upstream", p.deleteUpstream)
 
 	r.Post("/", p.createPool)
+	r.Get("/", p.getPools)
 	return r
 }
 
@@ -383,4 +385,50 @@ func (p *PoolHandler) createPool(w http.ResponseWriter, r *http.Request) {
 
 	functions.RespondwithJSON(w, http.StatusCreated, res)
 
+}
+
+func (p *PoolHandler) getPools(w http.ResponseWriter, r *http.Request) {
+	rows, err := p.Queries.ListPoolsWithUpstreams(r.Context())
+	if err != nil {
+		functions.RespondwithError(w, http.StatusInternalServerError, "Failed to fetch pools", err)
+		return
+	}
+
+	poolMap := make(map[uuid.UUID]*models.GetPoolsResponse)
+
+	// Preserve order
+	var orderedPools []*models.GetPoolsResponse
+
+	for _, row := range rows {
+		pool, exists := poolMap[row.PoolID]
+		if !exists {
+			pool = &models.GetPoolsResponse{
+				Id:        row.PoolID,
+				Name:      row.PoolName,
+				Tag:       row.PoolTag,
+				Subdomain: row.PoolSubdomain,
+				Port:      row.PoolPort,
+				Upstreams: []models.PoolUpstream{},
+			}
+			poolMap[row.PoolID] = pool
+			orderedPools = append(orderedPools, pool)
+		}
+
+		if row.UpstreamTag.Valid {
+			pool.Upstreams = append(pool.Upstreams, models.PoolUpstream{
+				Tag:    row.UpstreamTag.String,
+				Format: row.UpstreamFormat.String,
+				Port:   row.UpstreamPort.Int32,
+				Domain: row.UpstreamDomain.String,
+			})
+		}
+	}
+
+	// Create final response from ordered list
+	response := make([]models.GetPoolsResponse, 0, len(orderedPools))
+	for _, pool := range orderedPools {
+		response = append(response, *pool)
+	}
+
+	functions.RespondwithJSON(w, http.StatusOK, response)
 }

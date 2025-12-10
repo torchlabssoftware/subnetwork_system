@@ -7,6 +7,7 @@ package repository
 
 import (
 	"context"
+	"database/sql"
 
 	"github.com/google/uuid"
 	"github.com/lib/pq"
@@ -307,4 +308,65 @@ func (q *Queries) InsetPool(ctx context.Context, arg InsetPoolParams) (Pool, err
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const listPoolsWithUpstreams = `-- name: ListPoolsWithUpstreams :many
+SELECT 
+    p.id AS pool_id,
+    p.name AS pool_name,
+    p.tag AS pool_tag,
+    p.subdomain AS pool_subdomain,
+    p.port AS pool_port,
+    u.tag AS upstream_tag,
+    u.format AS upstream_format,
+    u.port AS upstream_port,
+    u.domain AS upstream_domain
+FROM pool p
+LEFT JOIN pool_upstream_weight puw ON p.id = puw.pool_id
+LEFT JOIN upstream u ON puw.upstream_id = u.id
+`
+
+type ListPoolsWithUpstreamsRow struct {
+	PoolID         uuid.UUID
+	PoolName       string
+	PoolTag        string
+	PoolSubdomain  string
+	PoolPort       int32
+	UpstreamTag    sql.NullString
+	UpstreamFormat sql.NullString
+	UpstreamPort   sql.NullInt32
+	UpstreamDomain sql.NullString
+}
+
+func (q *Queries) ListPoolsWithUpstreams(ctx context.Context) ([]ListPoolsWithUpstreamsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listPoolsWithUpstreams)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListPoolsWithUpstreamsRow
+	for rows.Next() {
+		var i ListPoolsWithUpstreamsRow
+		if err := rows.Scan(
+			&i.PoolID,
+			&i.PoolName,
+			&i.PoolTag,
+			&i.PoolSubdomain,
+			&i.PoolPort,
+			&i.UpstreamTag,
+			&i.UpstreamFormat,
+			&i.UpstreamPort,
+			&i.UpstreamDomain,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
