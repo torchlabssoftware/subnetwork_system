@@ -43,6 +43,7 @@ func (p *PoolHandler) Routes() http.Handler {
 
 	r.Post("/", p.createPool)
 	r.Get("/", p.getPools)
+	r.Get("/{tag}", p.getPoolByTag)
 	return r
 }
 
@@ -431,4 +432,49 @@ func (p *PoolHandler) getPools(w http.ResponseWriter, r *http.Request) {
 	}
 
 	functions.RespondwithJSON(w, http.StatusOK, response)
+}
+
+func (p *PoolHandler) getPoolByTag(w http.ResponseWriter, r *http.Request) {
+	tag := chi.URLParam(r, "tag")
+	if tag == "" {
+		functions.RespondwithError(w, http.StatusBadRequest, "Tag is required", fmt.Errorf("missing tag param"))
+		return
+	}
+
+	rows, err := p.Queries.GetPoolByTagWithUpstreams(r.Context(), tag)
+	if err != nil {
+		functions.RespondwithError(w, http.StatusInternalServerError, "Failed to fetch pool", err)
+		return
+	}
+
+	if len(rows) == 0 {
+		functions.RespondwithError(w, http.StatusNotFound, "Pool not found", fmt.Errorf("pool not found"))
+		return
+	}
+
+	var poolResponse *models.GetPoolsResponse
+
+	for _, row := range rows {
+		if poolResponse == nil {
+			poolResponse = &models.GetPoolsResponse{
+				Id:        row.PoolID,
+				Name:      row.PoolName,
+				Tag:       row.PoolTag,
+				Subdomain: row.PoolSubdomain,
+				Port:      row.PoolPort,
+				Upstreams: []models.PoolUpstream{},
+			}
+		}
+
+		if row.UpstreamTag.Valid {
+			poolResponse.Upstreams = append(poolResponse.Upstreams, models.PoolUpstream{
+				Tag:    row.UpstreamTag.String,
+				Format: row.UpstreamFormat.String,
+				Port:   row.UpstreamPort.Int32,
+				Domain: row.UpstreamDomain.String,
+			})
+		}
+	}
+
+	functions.RespondwithJSON(w, http.StatusOK, poolResponse)
 }

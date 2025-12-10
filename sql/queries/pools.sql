@@ -59,3 +59,19 @@ SELECT
 FROM pool p
 LEFT JOIN pool_upstream_weight puw ON p.id = puw.pool_id
 LEFT JOIN upstream u ON puw.upstream_id = u.id;
+
+-- name: GetPoolByTagWithUpstreams :many
+SELECT 
+    p.id AS pool_id,
+    p.name AS pool_name,
+    p.tag AS pool_tag,
+    p.subdomain AS pool_subdomain,
+    p.port AS pool_port,
+    u.tag AS upstream_tag,
+    u.format AS upstream_format,
+    u.port AS upstream_port,
+    u.domain AS upstream_domain
+FROM pool p
+LEFT JOIN pool_upstream_weight puw ON p.id = puw.pool_id
+LEFT JOIN upstream u ON puw.upstream_id = u.id
+WHERE p.tag = $1;

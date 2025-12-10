@@ -157,6 +157,68 @@ func (q *Queries) GetCountries(ctx context.Context) ([]Country, error) {
 	return items, nil
 }
 
+const getPoolByTagWithUpstreams = `-- name: GetPoolByTagWithUpstreams :many
+SELECT 
+    p.id AS pool_id,
+    p.name AS pool_name,
+    p.tag AS pool_tag,
+    p.subdomain AS pool_subdomain,
+    p.port AS pool_port,
+    u.tag AS upstream_tag,
+    u.format AS upstream_format,
+    u.port AS upstream_port,
+    u.domain AS upstream_domain
+FROM pool p
+LEFT JOIN pool_upstream_weight puw ON p.id = puw.pool_id
+LEFT JOIN upstream u ON puw.upstream_id = u.id
+WHERE p.tag = $1
+`
+
+type GetPoolByTagWithUpstreamsRow struct {
+	PoolID         uuid.UUID
+	PoolName       string
+	PoolTag        string
+	PoolSubdomain  string
+	PoolPort       int32
+	UpstreamTag    sql.NullString
+	UpstreamFormat sql.NullString
+	UpstreamPort   sql.NullInt32
+	UpstreamDomain sql.NullString
+}
+
+func (q *Queries) GetPoolByTagWithUpstreams(ctx context.Context, tag string) ([]GetPoolByTagWithUpstreamsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getPoolByTagWithUpstreams, tag)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetPoolByTagWithUpstreamsRow
+	for rows.Next() {
+		var i GetPoolByTagWithUpstreamsRow
+		if err := rows.Scan(
+			&i.PoolID,
+			&i.PoolName,
+			&i.PoolTag,
+			&i.PoolSubdomain,
+			&i.PoolPort,
+			&i.UpstreamTag,
+			&i.UpstreamFormat,
+			&i.UpstreamPort,
+			&i.UpstreamDomain,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getRegions = `-- name: GetRegions :many
 SELECT id, name, created_at, updated_at FROM region
 `
@@ -227,17 +289,8 @@ func (q *Queries) GetUpstreams(ctx context.Context) ([]Upstream, error) {
 
 const insertPoolUpstreamWeight = `-- name: InsertPoolUpstreamWeight :many
 INSERT INTO pool_upstream_weight (pool_id, weight, upstream_id)
-SELECT 
-    $1,           -- pool_id (constant)
-    T.w,          -- weight (unnested)
-    U.id          -- upstream_id (matched by tag)
-FROM 
-    upstream AS U
-JOIN 
-    ROWS FROM (UNNEST($2::INT[]), UNNEST($3::text[])) AS T(w, t) 
-        ON U.tag = T.t -- Join the parallel (weight, tag) set to upstream based on tag
-RETURNING 
-    id, pool_id, upstream_id, weight
+SELECT $1,T.w,U.id FROM upstream AS U JOIN ROWS FROM (UNNEST($2::INT[]), UNNEST($3::text[])) AS T(w, t) ON U.tag = T.t 
+RETURNING id, pool_id, upstream_id, weight
 `
 
 type InsertPoolUpstreamWeightParams struct {
