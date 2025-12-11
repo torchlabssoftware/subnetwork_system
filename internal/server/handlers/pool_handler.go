@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi"
+	"github.com/google/uuid"
 	"github.com/torchlabssoftware/subnetwork_system/internal/db/repository"
 	functions "github.com/torchlabssoftware/subnetwork_system/internal/server/functions"
 	middleware "github.com/torchlabssoftware/subnetwork_system/internal/server/middleware"
@@ -41,6 +42,12 @@ func (p *PoolHandler) Routes() http.Handler {
 	r.Delete("/upstream", p.deleteUpstream)
 
 	r.Post("/", p.createPool)
+	r.Get("/", p.getPools)
+	r.Get("/{tag}", p.getPoolByTag)
+	r.Put("/{tag}", p.updatePool)
+	r.Delete("/{tag}", p.deletePool)
+	r.Post("/weight", p.addPoolUpstreamWeight)
+	r.Delete("/weight", p.deletePoolUpstreamWeight)
 	return r
 }
 
@@ -215,13 +222,13 @@ func (p *PoolHandler) getUpstreams(w http.ResponseWriter, r *http.Request) {
 	for _, upstream := range upstreams {
 		r := models.GetUpstreamResponce{
 			Id:               upstream.ID,
+			Tag:              upstream.Tag,
 			UpstreamProvider: upstream.UpstreamProvider,
 			Format:           upstream.Format,
 			Domain:           upstream.Domain,
 			Port:             int(upstream.Port),
-			PoolId:           upstream.PoolID,
-			CreatedAt:        upstream.CreatedAt.Time,
-			UpdatedAt:        upstream.UpdatedAt.Time,
+			CreatedAt:        upstream.CreatedAt,
+			UpdatedAt:        upstream.UpdatedAt,
 		}
 
 		res = append(res, r)
@@ -239,19 +246,19 @@ func (p *PoolHandler) createUpstream(w http.ResponseWriter, r *http.Request) {
 
 	if (req.UpstreamProvider == nil && *req.UpstreamProvider == "") ||
 		(req.Format == nil && *req.Format == "") ||
+		(req.Tag == nil && *req.Tag == "") ||
 		req.Port == nil ||
-		(req.Domain == nil && *req.Domain == "") ||
-		(req.PoolId == nil) {
+		(req.Domain == nil && *req.Domain == "") {
 		functions.RespondwithError(w, http.StatusBadRequest, "err in request body", fmt.Errorf("err in request body"))
 		return
 	}
 
 	args := repository.AddUpstreamParams{
+		Tag:              *req.Tag,
 		UpstreamProvider: *req.UpstreamProvider,
 		Format:           *req.Format,
 		Port:             int32(*req.Port),
 		Domain:           *req.Domain,
-		PoolID:           *req.PoolId,
 	}
 
 	upstream, err := p.Queries.AddUpstream(r.Context(), args)
@@ -262,13 +269,13 @@ func (p *PoolHandler) createUpstream(w http.ResponseWriter, r *http.Request) {
 
 	res := models.CreateUpstreamResponce{
 		Id:               upstream.ID,
+		Tag:              upstream.Tag,
 		UpstreamProvider: upstream.UpstreamProvider,
 		Format:           upstream.Format,
 		Port:             int(upstream.Port),
 		Domain:           upstream.Domain,
-		PoolId:           upstream.PoolID,
-		CreatedAt:        upstream.CreatedAt.Time,
-		UpdatedAt:        upstream.UpdatedAt.Time,
+		CreatedAt:        upstream.CreatedAt,
+		UpdatedAt:        upstream.UpdatedAt,
 	}
 
 	functions.RespondwithJSON(w, http.StatusCreated, res)
@@ -298,4 +305,332 @@ func (p *PoolHandler) deleteUpstream(w http.ResponseWriter, r *http.Request) {
 
 func (p *PoolHandler) createPool(w http.ResponseWriter, r *http.Request) {
 
+	//begin transaction
+	ctx, err := p.DB.Begin()
+	if err != nil {
+		functions.RespondwithError(w, http.StatusInternalServerError, "failed to create user", err)
+		return
+	}
+	defer func() {
+		_ = ctx.Rollback()
+	}()
+
+	qtx := p.Queries.WithTx(ctx)
+
+	var req models.CreatePoolRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		functions.RespondwithError(w, http.StatusBadRequest, "err in request body", err)
+		return
+	}
+
+	if (req.Name == nil && *req.Name == "") || (req.Tag == nil && *req.Tag == "") || req.RegionId == nil || (req.Subdomain == nil && *req.Subdomain == "") || (req.Port == nil) || req.UpStreams == nil {
+		functions.RespondwithError(w, http.StatusBadRequest, "err in request body", fmt.Errorf("err in request body"))
+		return
+	}
+
+	args := repository.InsetPoolParams{
+		Name:      *req.Name,
+		Tag:       *req.Tag,
+		RegionID:  *req.RegionId,
+		Subdomain: *req.Subdomain,
+		Port:      *req.Port,
+	}
+
+	pool, err := qtx.InsetPool(r.Context(), args)
+	if err != nil {
+		functions.RespondwithError(w, http.StatusBadRequest, "server error", err)
+		return
+	}
+
+	weights := []int32{}
+	upstreamTags := []string{}
+
+	for _, upstreams := range *req.UpStreams {
+		weights = append(weights, *upstreams.Weight)
+		upstreamTags = append(upstreamTags, *upstreams.UpstreamTag)
+	}
+
+	weightArgs := repository.InsertPoolUpstreamWeightParams{
+		PoolID:  pool.ID,
+		Column2: weights,
+		Column3: upstreamTags,
+	}
+
+	poolUpstreamWeights, err := qtx.InsertPoolUpstreamWeight(r.Context(), weightArgs)
+	if err != nil {
+		functions.RespondwithError(w, http.StatusBadRequest, "server error", err)
+		return
+	}
+
+	if err := ctx.Commit(); err != nil {
+		functions.RespondwithError(w, http.StatusInternalServerError, "failed to create pool", err)
+		return
+	}
+
+	upstreamsRes := []models.CreateUpstreamWeightResponce{}
+
+	for i, puw := range poolUpstreamWeights {
+		upstreamRes := models.CreateUpstreamWeightResponce{
+			UpstreamTag: upstreamTags[i],
+			Weight:      puw.Weight,
+		}
+		upstreamsRes = append(upstreamsRes, upstreamRes)
+	}
+	res := models.CreatePoolResponce{
+		Id:        pool.ID,
+		Name:      &pool.Name,
+		Tag:       &pool.Tag,
+		RegionId:  &pool.RegionID,
+		Subdomain: &pool.Subdomain,
+		Port:      &pool.Port,
+		UpStreams: &upstreamsRes,
+		CreatedAt: pool.CreatedAt,
+		UpdatedAt: pool.UpdatedAt,
+	}
+
+	functions.RespondwithJSON(w, http.StatusCreated, res)
+
+}
+
+func (p *PoolHandler) getPools(w http.ResponseWriter, r *http.Request) {
+	rows, err := p.Queries.ListPoolsWithUpstreams(r.Context())
+	if err != nil {
+		functions.RespondwithError(w, http.StatusInternalServerError, "Failed to fetch pools", err)
+		return
+	}
+
+	poolMap := make(map[uuid.UUID]*models.GetPoolsResponse)
+
+	// Preserve order
+	var orderedPools []*models.GetPoolsResponse
+
+	for _, row := range rows {
+		pool, exists := poolMap[row.PoolID]
+		if !exists {
+			pool = &models.GetPoolsResponse{
+				Id:        row.PoolID,
+				Name:      row.PoolName,
+				Tag:       row.PoolTag,
+				Subdomain: row.PoolSubdomain,
+				Port:      row.PoolPort,
+				Upstreams: []models.PoolUpstream{},
+			}
+			poolMap[row.PoolID] = pool
+			orderedPools = append(orderedPools, pool)
+		}
+
+		if row.UpstreamTag.Valid {
+			pool.Upstreams = append(pool.Upstreams, models.PoolUpstream{
+				Tag:    row.UpstreamTag.String,
+				Format: row.UpstreamFormat.String,
+				Port:   row.UpstreamPort.Int32,
+				Domain: row.UpstreamDomain.String,
+			})
+		}
+	}
+
+	// Create final response from ordered list
+	response := make([]models.GetPoolsResponse, 0, len(orderedPools))
+	for _, pool := range orderedPools {
+		response = append(response, *pool)
+	}
+
+	functions.RespondwithJSON(w, http.StatusOK, response)
+}
+
+func (p *PoolHandler) getPoolByTag(w http.ResponseWriter, r *http.Request) {
+	tag := chi.URLParam(r, "tag")
+	if tag == "" {
+		functions.RespondwithError(w, http.StatusBadRequest, "Tag is required", fmt.Errorf("missing tag param"))
+		return
+	}
+
+	rows, err := p.Queries.GetPoolByTagWithUpstreams(r.Context(), tag)
+	if err != nil {
+		functions.RespondwithError(w, http.StatusInternalServerError, "Failed to fetch pool", err)
+		return
+	}
+
+	if len(rows) == 0 {
+		functions.RespondwithError(w, http.StatusNotFound, "Pool not found", fmt.Errorf("pool not found"))
+		return
+	}
+
+	var poolResponse *models.GetPoolsResponse
+
+	for _, row := range rows {
+		if poolResponse == nil {
+			poolResponse = &models.GetPoolsResponse{
+				Id:        row.PoolID,
+				Name:      row.PoolName,
+				Tag:       row.PoolTag,
+				Subdomain: row.PoolSubdomain,
+				Port:      row.PoolPort,
+				Upstreams: []models.PoolUpstream{},
+			}
+		}
+
+		if row.UpstreamTag.Valid {
+			poolResponse.Upstreams = append(poolResponse.Upstreams, models.PoolUpstream{
+				Tag:    row.UpstreamTag.String,
+				Format: row.UpstreamFormat.String,
+				Port:   row.UpstreamPort.Int32,
+				Domain: row.UpstreamDomain.String,
+			})
+		}
+	}
+
+	functions.RespondwithJSON(w, http.StatusOK, poolResponse)
+}
+
+func (p *PoolHandler) updatePool(w http.ResponseWriter, r *http.Request) {
+	tagStr := chi.URLParam(r, "tag")
+	if tagStr == "" {
+		functions.RespondwithError(w, http.StatusBadRequest, "Pool Tag is required", fmt.Errorf("missing tag param"))
+		return
+	}
+
+	var req models.UpdatePoolRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		functions.RespondwithError(w, http.StatusBadRequest, "Invalid request body", err)
+		return
+	}
+
+	name := sql.NullString{Valid: false}
+	if req.Name != nil {
+		name = sql.NullString{String: *req.Name, Valid: true}
+	}
+
+	regionId := uuid.NullUUID{Valid: false}
+	if req.RegionId != nil {
+		regionId = uuid.NullUUID{UUID: *req.RegionId, Valid: true}
+	}
+
+	subdomain := sql.NullString{Valid: false}
+	if req.Subdomain != nil {
+		subdomain = sql.NullString{String: *req.Subdomain, Valid: true}
+	}
+
+	port := sql.NullInt32{Valid: false}
+	if req.Port != nil {
+		port = sql.NullInt32{Int32: *req.Port, Valid: true}
+	}
+
+	args := repository.UpdatePoolParams{
+		Tag:       tagStr,
+		Name:      name,
+		RegionID:  regionId,
+		Subdomain: subdomain,
+		Port:      port,
+	}
+
+	updatedPool, err := p.Queries.UpdatePool(r.Context(), args)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			functions.RespondwithError(w, http.StatusNotFound, "Pool not found", err)
+			return
+		}
+		functions.RespondwithError(w, http.StatusInternalServerError, "Failed to update pool", err)
+		return
+	}
+
+	res := models.CreatePoolResponce{
+		Id:        updatedPool.ID,
+		Name:      &updatedPool.Name,
+		Tag:       &updatedPool.Tag,
+		RegionId:  &updatedPool.RegionID,
+		Subdomain: &updatedPool.Subdomain,
+		Port:      &updatedPool.Port,
+		CreatedAt: updatedPool.CreatedAt,
+		UpdatedAt: updatedPool.UpdatedAt,
+	}
+
+	functions.RespondwithJSON(w, http.StatusOK, res)
+}
+
+func (p *PoolHandler) deletePool(w http.ResponseWriter, r *http.Request) {
+	tag := chi.URLParam(r, "tag")
+	if tag == "" {
+		functions.RespondwithError(w, http.StatusBadRequest, "Tag is required", fmt.Errorf("missing tag param"))
+		return
+	}
+
+	err := p.Queries.DeletePool(r.Context(), tag)
+	if err != nil {
+		functions.RespondwithError(w, http.StatusInternalServerError, "Failed to delete pool", err)
+		return
+	}
+
+	res := struct {
+		Message string `json:"message"`
+	}{
+		Message: "deleted",
+	}
+
+	functions.RespondwithJSON(w, http.StatusOK, res)
+}
+
+func (p *PoolHandler) addPoolUpstreamWeight(w http.ResponseWriter, r *http.Request) {
+	var req models.AddPoolUpstreamWeightRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		functions.RespondwithError(w, http.StatusBadRequest, "Invalid request body", err)
+		return
+	}
+
+	if req.PoolTag == "" || req.UpstreamTag == "" || req.Weight == 0 {
+		functions.RespondwithError(w, http.StatusBadRequest, "Pool Tag, Upstream Tag and Weight are required", fmt.Errorf("missing fields"))
+		return
+	}
+
+	args := repository.AddPoolUpstreamWeightParams{
+		Tag:    req.PoolTag,
+		Tag_2:  req.UpstreamTag,
+		Weight: req.Weight,
+	}
+
+	_, err := p.Queries.AddPoolUpstreamWeight(r.Context(), args)
+	if err != nil {
+		functions.RespondwithError(w, http.StatusInternalServerError, "Failed to add upstream weight", err)
+		return
+	}
+
+	res := struct {
+		Message string `json:"message"`
+	}{
+		Message: "added",
+	}
+
+	functions.RespondwithJSON(w, http.StatusCreated, res)
+}
+
+func (p *PoolHandler) deletePoolUpstreamWeight(w http.ResponseWriter, r *http.Request) {
+	var req models.DeletePoolUpstreamWeightRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		functions.RespondwithError(w, http.StatusBadRequest, "Invalid request body", err)
+		return
+	}
+
+	if req.PoolTag == "" || req.UpstreamTag == "" {
+		functions.RespondwithError(w, http.StatusBadRequest, "Pool Tag and Upstream Tag are required", fmt.Errorf("missing fields"))
+		return
+	}
+
+	args := repository.DeletePoolUpstreamWeightParams{
+		Tag:   req.PoolTag,
+		Tag_2: req.UpstreamTag,
+	}
+
+	err := p.Queries.DeletePoolUpstreamWeight(r.Context(), args)
+	if err != nil {
+		functions.RespondwithError(w, http.StatusInternalServerError, "Failed to delete upstream weight", err)
+		return
+	}
+
+	res := struct {
+		Message string `json:"message"`
+	}{
+		Message: "deleted",
+	}
+
+	functions.RespondwithJSON(w, http.StatusOK, res)
 }

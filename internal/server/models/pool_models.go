@@ -58,34 +58,99 @@ type DeleteCountryRequest struct {
 
 type GetUpstreamResponce struct {
 	Id               uuid.UUID `json:"id"`
+	Tag              string    `json:"tag"`
 	UpstreamProvider string    `json:"upstream_provider"`
 	Format           string    `json:"format"`
 	Port             int       `json:"port"`
 	Domain           string    `json:"domain"`
-	PoolId           uuid.UUID `json:"pool_id"`
 	CreatedAt        time.Time `json:"created_at"`
 	UpdatedAt        time.Time `json:"updated_at "`
 }
 
 type CreateUpstreamRequest struct {
-	UpstreamProvider *string    `json:"upstream_provider"`
-	Format           *string    `json:"format"`
-	Port             *int       `json:"port"`
-	Domain           *string    `json:"domain"`
-	PoolId           *uuid.UUID `json:"pool_id"`
+	Tag              *string `json:"tag"`
+	UpstreamProvider *string `json:"upstream_provider"`
+	Format           *string `json:"format"`
+	Port             *int    `json:"port"`
+	Domain           *string `json:"domain"`
 }
 
 type CreateUpstreamResponce struct {
 	Id               uuid.UUID `json:"id"`
+	Tag              string    `json:"tag"`
 	UpstreamProvider string    `json:"upstream_provider"`
 	Format           string    `json:"format"`
 	Port             int       `json:"port"`
 	Domain           string    `json:"domain"`
-	PoolId           uuid.UUID `json:"pool_id"`
 	CreatedAt        time.Time `json:"created_at"`
 	UpdatedAt        time.Time `json:"updated_at "`
 }
 
 type DeleteUpstreamRequest struct {
 	Id uuid.UUID `json:"id"`
+}
+
+type CreatePoolRequest struct {
+	Name      *string                        `json:"name"`
+	Tag       *string                        `json:"tag"`
+	RegionId  *uuid.UUID                     `json:"region_id"`
+	Subdomain *string                        `json:"subdomain"`
+	Port      *int32                         `json:"port"`
+	UpStreams *[]CreateUpstreamWeightRequest `json:"upstreams"`
+}
+
+type CreateUpstreamWeightRequest struct {
+	UpstreamTag *string `json:"upstream_tag"`
+	Weight      *int32  `json:"weight"`
+}
+
+type CreateUpstreamWeightResponce struct {
+	UpstreamTag string `json:"upstream_tag,omitempty"`
+	Weight      int32  `json:"weight,omitempty"`
+}
+
+type CreatePoolResponce struct {
+	Id        uuid.UUID                       `json:"id,omitempty"`
+	Name      *string                         `json:"name,omitempty"`
+	Tag       *string                         `json:"tag,omitempty"`
+	RegionId  *uuid.UUID                      `json:"region_id,omitempty"`
+	Subdomain *string                         `json:"subdomain,omitempty"`
+	Port      *int32                          `json:"port,omitempty"`
+	UpStreams *[]CreateUpstreamWeightResponce `json:"upstreams,omitempty"`
+	CreatedAt time.Time                       `json:"created_at,omitempty"`
+	UpdatedAt time.Time                       `json:"updated_at,omitempty"`
+}
+
+type PoolUpstream struct {
+	Tag    string `json:"tag"`
+	Format string `json:"format"`
+	Port   int32  `json:"port"`
+	Domain string `json:"domain"`
+}
+
+type GetPoolsResponse struct {
+	Id        uuid.UUID      `json:"id,omitempty"`
+	Name      string         `json:"name,omitempty"`
+	Tag       string         `json:"tag,omitempty"`
+	Subdomain string         `json:"subdomain,omitempty"`
+	Port      int32          `json:"port,omitempty"`
+	Upstreams []PoolUpstream `json:"upstreams,omitempty"`
+}
+
+type UpdatePoolRequest struct {
+	Name      *string    `json:"name"`
+	RegionId  *uuid.UUID `json:"region_id"`
+	Subdomain *string    `json:"subdomain"`
+	Port      *int32     `json:"port"`
+}
+
+type AddPoolUpstreamWeightRequest struct {
+	PoolTag     string `json:"pool_tag"`
+	UpstreamTag string `json:"upstream_tag"`
+	Weight      int32  `json:"weight"`
+}
+
+type DeletePoolUpstreamWeightRequest struct {
+	PoolTag     string `json:"pool_tag"`
+	UpstreamTag string `json:"upstream_tag"`
 }

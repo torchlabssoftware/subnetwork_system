@@ -7,8 +7,10 @@ package repository
 
 import (
 	"context"
+	"database/sql"
 
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 )
 
 const addCountry = `-- name: AddCountry :one
@@ -37,6 +39,34 @@ func (q *Queries) AddCountry(ctx context.Context, arg AddCountryParams) (Country
 	return i, err
 }
 
+const addPoolUpstreamWeight = `-- name: AddPoolUpstreamWeight :one
+INSERT INTO pool_upstream_weight (pool_id, upstream_id, weight)
+VALUES (
+    (SELECT p.id FROM pool p WHERE p.tag = $1),
+    (SELECT u.id FROM upstream u WHERE u.tag = $2),
+    $3
+)
+RETURNING id, pool_id, upstream_id, weight
+`
+
+type AddPoolUpstreamWeightParams struct {
+	Tag    string
+	Tag_2  string
+	Weight int32
+}
+
+func (q *Queries) AddPoolUpstreamWeight(ctx context.Context, arg AddPoolUpstreamWeightParams) (PoolUpstreamWeight, error) {
+	row := q.db.QueryRowContext(ctx, addPoolUpstreamWeight, arg.Tag, arg.Tag_2, arg.Weight)
+	var i PoolUpstreamWeight
+	err := row.Scan(
+		&i.ID,
+		&i.PoolID,
+		&i.UpstreamID,
+		&i.Weight,
+	)
+	return i, err
+}
+
 const addRegion = `-- name: AddRegion :one
 INSERT INTO region(name)
 VALUES($1)
@@ -56,35 +86,35 @@ func (q *Queries) AddRegion(ctx context.Context, name string) (Region, error) {
 }
 
 const addUpstream = `-- name: AddUpstream :one
-INSERT INTO upstream(upstream_provider,format,port,domain,pool_id)
+INSERT INTO upstream(tag,upstream_provider,format,port,domain)
 VALUES($1,$2,$3,$4,$5)
-RETURNING id, upstream_provider, format, port, domain, pool_id, created_at, updated_at
+RETURNING id, tag, upstream_provider, format, port, domain, created_at, updated_at
 `
 
 type AddUpstreamParams struct {
+	Tag              string
 	UpstreamProvider string
 	Format           string
 	Port             int32
 	Domain           string
-	PoolID           uuid.UUID
 }
 
 func (q *Queries) AddUpstream(ctx context.Context, arg AddUpstreamParams) (Upstream, error) {
 	row := q.db.QueryRowContext(ctx, addUpstream,
+		arg.Tag,
 		arg.UpstreamProvider,
 		arg.Format,
 		arg.Port,
 		arg.Domain,
-		arg.PoolID,
 	)
 	var i Upstream
 	err := row.Scan(
 		&i.ID,
+		&i.Tag,
 		&i.UpstreamProvider,
 		&i.Format,
 		&i.Port,
 		&i.Domain,
-		&i.PoolID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -94,7 +124,6 @@ func (q *Queries) AddUpstream(ctx context.Context, arg AddUpstreamParams) (Upstr
 const deleteCountry = `-- name: DeleteCountry :exec
 DELETE FROM country as c
 where c.name = $1
-RETURNING id, name, code, region_id, created_at, updated_at
 `
 
 func (q *Queries) DeleteCountry(ctx context.Context, name string) error {
@@ -102,10 +131,35 @@ func (q *Queries) DeleteCountry(ctx context.Context, name string) error {
 	return err
 }
 
+const deletePool = `-- name: DeletePool :exec
+DELETE FROM pool
+WHERE tag = $1
+`
+
+func (q *Queries) DeletePool(ctx context.Context, tag string) error {
+	_, err := q.db.ExecContext(ctx, deletePool, tag)
+	return err
+}
+
+const deletePoolUpstreamWeight = `-- name: DeletePoolUpstreamWeight :exec
+DELETE FROM pool_upstream_weight
+WHERE pool_id = (SELECT p.id FROM pool p WHERE p.tag = $1)
+  AND upstream_id = (SELECT u.id FROM upstream u WHERE u.tag = $2)
+`
+
+type DeletePoolUpstreamWeightParams struct {
+	Tag   string
+	Tag_2 string
+}
+
+func (q *Queries) DeletePoolUpstreamWeight(ctx context.Context, arg DeletePoolUpstreamWeightParams) error {
+	_, err := q.db.ExecContext(ctx, deletePoolUpstreamWeight, arg.Tag, arg.Tag_2)
+	return err
+}
+
 const deleteRegion = `-- name: DeleteRegion :exec
 DELETE FROM region as r
 where r.name = $1
-RETURNING id, name, created_at, updated_at
 `
 
 func (q *Queries) DeleteRegion(ctx context.Context, name string) error {
@@ -116,7 +170,6 @@ func (q *Queries) DeleteRegion(ctx context.Context, name string) error {
 const deleteUpstream = `-- name: DeleteUpstream :exec
 DELETE FROM upstream as u
 where u.id = $1
-RETURNING id, upstream_provider, format, port, domain, pool_id, created_at, updated_at
 `
 
 func (q *Queries) DeleteUpstream(ctx context.Context, id uuid.UUID) error {
@@ -144,6 +197,68 @@ func (q *Queries) GetCountries(ctx context.Context) ([]Country, error) {
 			&i.RegionID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getPoolByTagWithUpstreams = `-- name: GetPoolByTagWithUpstreams :many
+SELECT 
+    p.id AS pool_id,
+    p.name AS pool_name,
+    p.tag AS pool_tag,
+    p.subdomain AS pool_subdomain,
+    p.port AS pool_port,
+    u.tag AS upstream_tag,
+    u.format AS upstream_format,
+    u.port AS upstream_port,
+    u.domain AS upstream_domain
+FROM pool p
+LEFT JOIN pool_upstream_weight puw ON p.id = puw.pool_id
+LEFT JOIN upstream u ON puw.upstream_id = u.id
+WHERE p.tag = $1
+`
+
+type GetPoolByTagWithUpstreamsRow struct {
+	PoolID         uuid.UUID
+	PoolName       string
+	PoolTag        string
+	PoolSubdomain  string
+	PoolPort       int32
+	UpstreamTag    sql.NullString
+	UpstreamFormat sql.NullString
+	UpstreamPort   sql.NullInt32
+	UpstreamDomain sql.NullString
+}
+
+func (q *Queries) GetPoolByTagWithUpstreams(ctx context.Context, tag string) ([]GetPoolByTagWithUpstreamsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getPoolByTagWithUpstreams, tag)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetPoolByTagWithUpstreamsRow
+	for rows.Next() {
+		var i GetPoolByTagWithUpstreamsRow
+		if err := rows.Scan(
+			&i.PoolID,
+			&i.PoolName,
+			&i.PoolTag,
+			&i.PoolSubdomain,
+			&i.PoolPort,
+			&i.UpstreamTag,
+			&i.UpstreamFormat,
+			&i.UpstreamPort,
+			&i.UpstreamDomain,
 		); err != nil {
 			return nil, err
 		}
@@ -191,7 +306,7 @@ func (q *Queries) GetRegions(ctx context.Context) ([]Region, error) {
 }
 
 const getUpstreams = `-- name: GetUpstreams :many
-SELECT id, upstream_provider, format, port, domain, pool_id, created_at, updated_at FROM upstream
+SELECT id, tag, upstream_provider, format, port, domain, created_at, updated_at FROM upstream
 `
 
 func (q *Queries) GetUpstreams(ctx context.Context) ([]Upstream, error) {
@@ -205,11 +320,11 @@ func (q *Queries) GetUpstreams(ctx context.Context) ([]Upstream, error) {
 		var i Upstream
 		if err := rows.Scan(
 			&i.ID,
+			&i.Tag,
 			&i.UpstreamProvider,
 			&i.Format,
 			&i.Port,
 			&i.Domain,
-			&i.PoolID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -224,4 +339,183 @@ func (q *Queries) GetUpstreams(ctx context.Context) ([]Upstream, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const insertPoolUpstreamWeight = `-- name: InsertPoolUpstreamWeight :many
+INSERT INTO pool_upstream_weight (pool_id, weight, upstream_id)
+SELECT $1,T.w,U.id FROM upstream AS U JOIN ROWS FROM (UNNEST($2::INT[]), UNNEST($3::text[])) AS T(w, t) ON U.tag = T.t 
+RETURNING id, pool_id, upstream_id, weight
+`
+
+type InsertPoolUpstreamWeightParams struct {
+	PoolID  uuid.UUID
+	Column2 []int32
+	Column3 []string
+}
+
+func (q *Queries) InsertPoolUpstreamWeight(ctx context.Context, arg InsertPoolUpstreamWeightParams) ([]PoolUpstreamWeight, error) {
+	rows, err := q.db.QueryContext(ctx, insertPoolUpstreamWeight, arg.PoolID, pq.Array(arg.Column2), pq.Array(arg.Column3))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []PoolUpstreamWeight
+	for rows.Next() {
+		var i PoolUpstreamWeight
+		if err := rows.Scan(
+			&i.ID,
+			&i.PoolID,
+			&i.UpstreamID,
+			&i.Weight,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const insetPool = `-- name: InsetPool :one
+INSERT INTO pool(name,tag,region_id,subdomain,port)
+VALUES($1,$2,$3,$4,$5)
+RETURNING id, name, tag, region_id, subdomain, port, created_at, updated_at
+`
+
+type InsetPoolParams struct {
+	Name      string
+	Tag       string
+	RegionID  uuid.UUID
+	Subdomain string
+	Port      int32
+}
+
+func (q *Queries) InsetPool(ctx context.Context, arg InsetPoolParams) (Pool, error) {
+	row := q.db.QueryRowContext(ctx, insetPool,
+		arg.Name,
+		arg.Tag,
+		arg.RegionID,
+		arg.Subdomain,
+		arg.Port,
+	)
+	var i Pool
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Tag,
+		&i.RegionID,
+		&i.Subdomain,
+		&i.Port,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const listPoolsWithUpstreams = `-- name: ListPoolsWithUpstreams :many
+SELECT 
+    p.id AS pool_id,
+    p.name AS pool_name,
+    p.tag AS pool_tag,
+    p.subdomain AS pool_subdomain,
+    p.port AS pool_port,
+    u.tag AS upstream_tag,
+    u.format AS upstream_format,
+    u.port AS upstream_port,
+    u.domain AS upstream_domain
+FROM pool p
+LEFT JOIN pool_upstream_weight puw ON p.id = puw.pool_id
+LEFT JOIN upstream u ON puw.upstream_id = u.id
+`
+
+type ListPoolsWithUpstreamsRow struct {
+	PoolID         uuid.UUID
+	PoolName       string
+	PoolTag        string
+	PoolSubdomain  string
+	PoolPort       int32
+	UpstreamTag    sql.NullString
+	UpstreamFormat sql.NullString
+	UpstreamPort   sql.NullInt32
+	UpstreamDomain sql.NullString
+}
+
+func (q *Queries) ListPoolsWithUpstreams(ctx context.Context) ([]ListPoolsWithUpstreamsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listPoolsWithUpstreams)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListPoolsWithUpstreamsRow
+	for rows.Next() {
+		var i ListPoolsWithUpstreamsRow
+		if err := rows.Scan(
+			&i.PoolID,
+			&i.PoolName,
+			&i.PoolTag,
+			&i.PoolSubdomain,
+			&i.PoolPort,
+			&i.UpstreamTag,
+			&i.UpstreamFormat,
+			&i.UpstreamPort,
+			&i.UpstreamDomain,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const updatePool = `-- name: UpdatePool :one
+UPDATE pool
+SET 
+    name = COALESCE($2, name),
+    region_id = COALESCE($3, region_id),
+    subdomain = COALESCE($4, subdomain),
+    port = COALESCE($5, port),
+    updated_at = NOW()
+WHERE tag = $1
+RETURNING id, name, tag, region_id, subdomain, port, created_at, updated_at
+`
+
+type UpdatePoolParams struct {
+	Tag       string
+	Name      sql.NullString
+	RegionID  uuid.NullUUID
+	Subdomain sql.NullString
+	Port      sql.NullInt32
+}
+
+func (q *Queries) UpdatePool(ctx context.Context, arg UpdatePoolParams) (Pool, error) {
+	row := q.db.QueryRowContext(ctx, updatePool,
+		arg.Tag,
+		arg.Name,
+		arg.RegionID,
+		arg.Subdomain,
+		arg.Port,
+	)
+	var i Pool
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Tag,
+		&i.RegionID,
+		&i.Subdomain,
+		&i.Port,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }

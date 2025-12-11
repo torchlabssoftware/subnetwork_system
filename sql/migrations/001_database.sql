@@ -41,8 +41,8 @@ CREATE TABLE user_ip_whitelist (
 
 CREATE TABLE pool (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name TEXT NOT NULL,
-    tag TEXT NOT NULL,
+    name TEXT NOT NULL ,
+    tag TEXT NOT NULL UNIQUE,
     region_id UUID NOT NULL REFERENCES region(id) ON DELETE SET NULL,
     subdomain TEXT NOT NULL,
     port INT NOT NULL,
@@ -59,13 +59,13 @@ CREATE TABLE user_pools (
 
 CREATE TABLE upstream (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tag TEXT NOT NULL UNIQUE,
     upstream_provider TEXT NOT NULL,
     format TEXT NOT NULL,
     port INT NOT NULL,
     domain TEXT NOT NULL,
-    pool_id UUID NOT NULL REFERENCES pool(id) ON DELETE CASCADE,
-    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE pool_upstream_weight (
@@ -78,13 +78,13 @@ CREATE TABLE pool_upstream_weight (
 
 CREATE TABLE worker (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name TEXT NOT NULL,
+    name TEXT NOT NULL UNIQUE,
     region_id UUID NOT NULL REFERENCES region(id) ON DELETE CASCADE,
     ip_address TEXT NOT NULL,
-    status TEXT DEFAULT 'active',
-    last_seen TIMESTAMPTZ,
-    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    status TEXT NOT NULL DEFAULT 'active',
+    last_seen TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE worker_domains (

@@ -12,26 +12,40 @@ import (
 
 type Querier interface {
 	AddCountry(ctx context.Context, arg AddCountryParams) (Country, error)
+	AddPoolUpstreamWeight(ctx context.Context, arg AddPoolUpstreamWeightParams) (PoolUpstreamWeight, error)
 	AddRegion(ctx context.Context, name string) (Region, error)
 	AddUpstream(ctx context.Context, arg AddUpstreamParams) (Upstream, error)
 	AddUserPoolsByPoolTags(ctx context.Context, arg AddUserPoolsByPoolTagsParams) (AddUserPoolsByPoolTagsRow, error)
+	AddWorkerDomain(ctx context.Context, arg AddWorkerDomainParams) (WorkerDomain, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
+	CreateWorker(ctx context.Context, arg CreateWorkerParams) (Worker, error)
 	DeleteCountry(ctx context.Context, name string) error
+	DeletePool(ctx context.Context, tag string) error
+	DeletePoolUpstreamWeight(ctx context.Context, arg DeletePoolUpstreamWeightParams) error
 	DeleteRegion(ctx context.Context, name string) error
 	DeleteUpstream(ctx context.Context, id uuid.UUID) error
 	DeleteUserIpwhitelist(ctx context.Context, arg DeleteUserIpwhitelistParams) error
 	DeleteUserPoolsByTags(ctx context.Context, arg DeleteUserPoolsByTagsParams) error
+	DeleteWorkerByName(ctx context.Context, name string) error
+	DeleteWorkerDomain(ctx context.Context, arg DeleteWorkerDomainParams) error
+	GetAllWorkers(ctx context.Context) ([]GetAllWorkersRow, error)
 	GetAllusers(ctx context.Context) ([]GetAllusersRow, error)
 	GetCountries(ctx context.Context) ([]Country, error)
 	GetDatausageById(ctx context.Context, id uuid.UUID) (GetDatausageByIdRow, error)
+	GetPoolByTagWithUpstreams(ctx context.Context, tag string) ([]GetPoolByTagWithUpstreamsRow, error)
 	GetRegions(ctx context.Context) ([]Region, error)
 	GetUpstreams(ctx context.Context) ([]Upstream, error)
 	GetUserByUsername(ctx context.Context, username string) (User, error)
 	GetUserIpwhitelistByUserId(ctx context.Context, id uuid.UUID) (GetUserIpwhitelistByUserIdRow, error)
 	GetUserPoolsByUserId(ctx context.Context, id uuid.UUID) (GetUserPoolsByUserIdRow, error)
 	GetUserbyId(ctx context.Context, id uuid.UUID) (GetUserbyIdRow, error)
+	GetWorkerByName(ctx context.Context, name string) (GetWorkerByNameRow, error)
+	InsertPoolUpstreamWeight(ctx context.Context, arg InsertPoolUpstreamWeightParams) ([]PoolUpstreamWeight, error)
 	InsertUserIpwhitelist(ctx context.Context, arg InsertUserIpwhitelistParams) ([]UserIpWhitelist, error)
+	InsetPool(ctx context.Context, arg InsetPoolParams) (Pool, error)
+	ListPoolsWithUpstreams(ctx context.Context) ([]ListPoolsWithUpstreamsRow, error)
 	SoftDeleteUser(ctx context.Context, id uuid.UUID) error
+	UpdatePool(ctx context.Context, arg UpdatePoolParams) (Pool, error)
 	UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error)
 }
 
