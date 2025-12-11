@@ -39,6 +39,8 @@ func (ws *WorkerHandler) Routes() http.Handler {
 	r.Get("/", ws.GetAllWorkers)
 	r.Get("/{name}", ws.GetWorkerByName)
 	r.Delete("/{name}", ws.DeleteWorker)
+	r.Post("/{name}/domains", ws.AddWorkerDomain)
+	r.Delete("/{name}/domains", ws.DeleteWorkerDomain)
 	return r
 
 }
@@ -164,4 +166,68 @@ func (ws *WorkerHandler) DeleteWorker(w http.ResponseWriter, r *http.Request) {
 	}
 
 	functions.RespondwithJSON(w, http.StatusOK, map[string]string{"message": "Worker deleted successfully"})
+}
+
+func (ws *WorkerHandler) AddWorkerDomain(w http.ResponseWriter, r *http.Request) {
+	name := chi.URLParam(r, "name")
+	if name == "" {
+		functions.RespondwithError(w, http.StatusBadRequest, "Worker name is required", fmt.Errorf("name is required"))
+		return
+	}
+
+	var req server.AddWorkerDomainRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		functions.RespondwithError(w, http.StatusBadRequest, "Invalid request body", err)
+		return
+	}
+
+	if len(req.Domain) == 0 {
+		functions.RespondwithError(w, http.StatusBadRequest, "Domains are required", fmt.Errorf("domains are required"))
+		return
+	}
+
+	_, err := ws.queries.AddWorkerDomain(r.Context(), repository.AddWorkerDomainParams{
+		Name:    name,
+		Column2: req.Domain,
+	})
+	if err != nil {
+		if err == sql.ErrNoRows {
+			functions.RespondwithError(w, http.StatusNotFound, "Worker not found", err)
+			return
+		}
+		functions.RespondwithError(w, http.StatusInternalServerError, "Failed to add domain", err)
+		return
+	}
+
+	functions.RespondwithJSON(w, http.StatusCreated, map[string]string{"message": "Domains added successfully"})
+}
+
+func (ws *WorkerHandler) DeleteWorkerDomain(w http.ResponseWriter, r *http.Request) {
+	name := chi.URLParam(r, "name")
+	if name == "" {
+		functions.RespondwithError(w, http.StatusBadRequest, "Worker name is required", fmt.Errorf("name is required"))
+		return
+	}
+
+	var req server.DeleteWorkerDomainRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		functions.RespondwithError(w, http.StatusBadRequest, "Invalid request body", err)
+		return
+	}
+
+	if len(req.Domain) == 0 {
+		functions.RespondwithError(w, http.StatusBadRequest, "Domains are required", fmt.Errorf("domains are required"))
+		return
+	}
+
+	err := ws.queries.DeleteWorkerDomain(r.Context(), repository.DeleteWorkerDomainParams{
+		Name:    name,
+		Column2: req.Domain,
+	})
+	if err != nil {
+		functions.RespondwithError(w, http.StatusInternalServerError, "Failed to delete domain", err)
+		return
+	}
+
+	functions.RespondwithJSON(w, http.StatusOK, map[string]string{"message": "Domain deleted successfully"})
 }

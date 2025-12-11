@@ -16,6 +16,7 @@ type Querier interface {
 	AddRegion(ctx context.Context, name string) (Region, error)
 	AddUpstream(ctx context.Context, arg AddUpstreamParams) (Upstream, error)
 	AddUserPoolsByPoolTags(ctx context.Context, arg AddUserPoolsByPoolTagsParams) (AddUserPoolsByPoolTagsRow, error)
+	AddWorkerDomain(ctx context.Context, arg AddWorkerDomainParams) (WorkerDomain, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	CreateWorker(ctx context.Context, arg CreateWorkerParams) (Worker, error)
 	DeleteCountry(ctx context.Context, name string) error
@@ -26,6 +27,7 @@ type Querier interface {
 	DeleteUserIpwhitelist(ctx context.Context, arg DeleteUserIpwhitelistParams) error
 	DeleteUserPoolsByTags(ctx context.Context, arg DeleteUserPoolsByTagsParams) error
 	DeleteWorkerByName(ctx context.Context, name string) error
+	DeleteWorkerDomain(ctx context.Context, arg DeleteWorkerDomainParams) error
 	GetAllWorkers(ctx context.Context) ([]GetAllWorkersRow, error)
 	GetAllusers(ctx context.Context) ([]GetAllusersRow, error)
 	GetCountries(ctx context.Context) ([]Country, error)

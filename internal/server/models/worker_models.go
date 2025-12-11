@@ -17,3 +17,11 @@ type AddWorkerResponse struct {
 	UpdatedAt  string   `json:"updated_at"`
 	Domains    []string `json:"domains,omitempty"`
 }
+
+type AddWorkerDomainRequest struct {
+	Domain []string `json:"domains"`
+}
+
+type DeleteWorkerDomainRequest struct {
+	Domain []string `json:"domains"`
+}

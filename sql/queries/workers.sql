@@ -39,3 +39,12 @@ GROUP BY w.id, r.name;
 -- name: DeleteWorkerByName :exec
 DELETE FROM worker WHERE name = $1;
 
+-- name: AddWorkerDomain :one
+INSERT INTO worker_domains (worker_id, domain)
+VALUES ((SELECT id FROM worker WHERE name = $1), UNNEST($2::TEXT[]))
+RETURNING *;
+
+-- name: DeleteWorkerDomain :exec
+DELETE FROM worker_domains
+WHERE worker_id = (SELECT id FROM worker WHERE name = $1) AND domain = ANY($2::TEXT[]);
+

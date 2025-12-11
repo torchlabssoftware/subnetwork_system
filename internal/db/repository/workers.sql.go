@@ -13,6 +13,24 @@ import (
 	"github.com/lib/pq"
 )
 
+const addWorkerDomain = `-- name: AddWorkerDomain :one
+INSERT INTO worker_domains (worker_id, domain)
+VALUES ((SELECT id FROM worker WHERE name = $1), UNNEST($2::TEXT[]))
+RETURNING id, worker_id, domain
+`
+
+type AddWorkerDomainParams struct {
+	Name    string
+	Column2 []string
+}
+
+func (q *Queries) AddWorkerDomain(ctx context.Context, arg AddWorkerDomainParams) (WorkerDomain, error) {
+	row := q.db.QueryRowContext(ctx, addWorkerDomain, arg.Name, pq.Array(arg.Column2))
+	var i WorkerDomain
+	err := row.Scan(&i.ID, &i.WorkerID, &i.Domain)
+	return i, err
+}
+
 const createWorker = `-- name: CreateWorker :one
 INSERT INTO worker (name, region_id, ip_address)
 VALUES ($1,(SELECT id from region where region.name = $2), $3)
@@ -47,6 +65,21 @@ DELETE FROM worker WHERE name = $1
 
 func (q *Queries) DeleteWorkerByName(ctx context.Context, name string) error {
 	_, err := q.db.ExecContext(ctx, deleteWorkerByName, name)
+	return err
+}
+
+const deleteWorkerDomain = `-- name: DeleteWorkerDomain :exec
+DELETE FROM worker_domains
+WHERE worker_id = (SELECT id FROM worker WHERE name = $1) AND domain = ANY($2::TEXT[])
+`
+
+type DeleteWorkerDomainParams struct {
+	Name    string
+	Column2 []string
+}
+
+func (q *Queries) DeleteWorkerDomain(ctx context.Context, arg DeleteWorkerDomainParams) error {
+	_, err := q.db.ExecContext(ctx, deleteWorkerDomain, arg.Name, pq.Array(arg.Column2))
 	return err
 }
 
