@@ -30,3 +30,11 @@ type AddWorkerDomainRequest struct {
 type DeleteWorkerDomainRequest struct {
 	Domain []string `json:"domains"`
 }
+
+type WorkerLoginRequest struct {
+	WorkerId *uuid.UUID `json:"worker_id"`
+}
+
+type WorkerLoginResponce struct {
+	Otp string `json:"otp"`
+}

@@ -31,26 +31,67 @@ func NewWorkerHandler(q *repository.Queries, db *sql.DB) *WorkerHandler {
 	return w
 }
 
-func (ws *WorkerHandler) Routes() http.Handler {
+func (wh *WorkerHandler) AdminRoutes() http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.AdminAuthentication)
 
-	r.Get("/ws", ws.serveWS)
-	r.Post("/", ws.AddWorker)
-	r.Get("/", ws.GetAllWorkers)
-	r.Get("/{name}", ws.GetWorkerByName)
-	r.Delete("/{name}", ws.DeleteWorker)
-	r.Post("/{name}/domains", ws.AddWorkerDomain)
-	r.Delete("/{name}/domains", ws.DeleteWorkerDomain)
+	r.Post("/", wh.AddWorker)
+	r.Get("/", wh.GetAllWorkers)
+	r.Get("/{name}", wh.GetWorkerByName)
+	r.Delete("/{name}", wh.DeleteWorker)
+	r.Post("/{name}/domains", wh.AddWorkerDomain)
+	r.Delete("/{name}/domains", wh.DeleteWorkerDomain)
 	return r
-
 }
 
-func (ws *WorkerHandler) serveWS(w http.ResponseWriter, r *http.Request) {
-	ws.wsManager.ServeWS(w, r)
+func (wh *WorkerHandler) WorkerRoutes() http.Handler {
+	r := chi.NewRouter()
+
+	r.Get("/ws/login", middleware.WorkerAuthentication(wh.login))
+	r.Get("/ws/serve", wh.serveWS)
+	return r
 }
 
-func (ws *WorkerHandler) AddWorker(w http.ResponseWriter, r *http.Request) {
+func (wh *WorkerHandler) login(w http.ResponseWriter, r *http.Request) {
+	var req server.WorkerLoginRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		functions.RespondwithError(w, http.StatusBadRequest, "Invalid request body", err)
+		return
+	}
+	if req.WorkerId == nil || *req.WorkerId == uuid.Nil {
+		functions.RespondwithError(w, http.StatusBadRequest, "WorkerId is required", fmt.Errorf("worker_id is required"))
+		return
+	}
+	_, err := wh.queries.GetWorkerById(r.Context(), *req.WorkerId)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			functions.RespondwithError(w, http.StatusNotFound, "Worker not found", err)
+			return
+		}
+		functions.RespondwithError(w, http.StatusInternalServerError, "Failed to get worker", err)
+		return
+	}
+	otp := wh.wsManager.OtpMap.NewOTP()
+	resp := server.WorkerLoginResponce{
+		Otp: otp.Key,
+	}
+	functions.RespondwithJSON(w, http.StatusOK, resp)
+}
+
+func (wh *WorkerHandler) serveWS(w http.ResponseWriter, r *http.Request) {
+	otp := r.URL.Query().Get("otp")
+	if otp == "" {
+		functions.RespondwithError(w, http.StatusBadRequest, "OTP is required", fmt.Errorf("otp is required"))
+		return
+	}
+	if !wh.wsManager.OtpMap.VerifyOTP(otp) {
+		functions.RespondwithError(w, http.StatusUnauthorized, "Invalid OTP", fmt.Errorf("invalid otp"))
+		return
+	}
+	wh.wsManager.ServeWS(w, r)
+}
+
+func (wh *WorkerHandler) AddWorker(w http.ResponseWriter, r *http.Request) {
 	var req server.AddWorkerRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		functions.RespondwithError(w, http.StatusBadRequest, "Invalid request body", err)
@@ -78,7 +119,7 @@ func (ws *WorkerHandler) AddWorker(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	worker, err := ws.queries.CreateWorker(r.Context(), repository.CreateWorkerParams{
+	worker, err := wh.queries.CreateWorker(r.Context(), repository.CreateWorkerParams{
 		Name:      *req.Name,
 		Name_2:    *req.RegionName,
 		IpAddress: *req.IPAddress,
@@ -107,8 +148,8 @@ func (ws *WorkerHandler) AddWorker(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func (ws *WorkerHandler) GetAllWorkers(w http.ResponseWriter, r *http.Request) {
-	workers, err := ws.queries.GetAllWorkers(r.Context())
+func (wh *WorkerHandler) GetAllWorkers(w http.ResponseWriter, r *http.Request) {
+	workers, err := wh.queries.GetAllWorkers(r.Context())
 	if err != nil {
 		functions.RespondwithError(w, http.StatusInternalServerError, "Failed to get workers", err)
 		return
@@ -133,14 +174,14 @@ func (ws *WorkerHandler) GetAllWorkers(w http.ResponseWriter, r *http.Request) {
 	functions.RespondwithJSON(w, http.StatusOK, resp)
 }
 
-func (ws *WorkerHandler) GetWorkerByName(w http.ResponseWriter, r *http.Request) {
+func (wh *WorkerHandler) GetWorkerByName(w http.ResponseWriter, r *http.Request) {
 	name := chi.URLParam(r, "name")
 	if name == "" {
 		functions.RespondwithError(w, http.StatusBadRequest, "Worker name is required", fmt.Errorf("name is required"))
 		return
 	}
 
-	worker, err := ws.queries.GetWorkerByName(r.Context(), name)
+	worker, err := wh.queries.GetWorkerByName(r.Context(), name)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			functions.RespondwithError(w, http.StatusNotFound, "Worker not found", err)
@@ -166,14 +207,14 @@ func (ws *WorkerHandler) GetWorkerByName(w http.ResponseWriter, r *http.Request)
 	functions.RespondwithJSON(w, http.StatusOK, resp)
 }
 
-func (ws *WorkerHandler) DeleteWorker(w http.ResponseWriter, r *http.Request) {
+func (wh *WorkerHandler) DeleteWorker(w http.ResponseWriter, r *http.Request) {
 	name := chi.URLParam(r, "name")
 	if name == "" {
 		functions.RespondwithError(w, http.StatusBadRequest, "Worker name is required", fmt.Errorf("name is required"))
 		return
 	}
 
-	err := ws.queries.DeleteWorkerByName(r.Context(), name)
+	err := wh.queries.DeleteWorkerByName(r.Context(), name)
 	if err != nil {
 		functions.RespondwithError(w, http.StatusInternalServerError, "Failed to delete worker", err)
 		return
@@ -182,7 +223,7 @@ func (ws *WorkerHandler) DeleteWorker(w http.ResponseWriter, r *http.Request) {
 	functions.RespondwithJSON(w, http.StatusOK, map[string]string{"message": "Worker deleted successfully"})
 }
 
-func (ws *WorkerHandler) AddWorkerDomain(w http.ResponseWriter, r *http.Request) {
+func (wh *WorkerHandler) AddWorkerDomain(w http.ResponseWriter, r *http.Request) {
 	name := chi.URLParam(r, "name")
 	if name == "" {
 		functions.RespondwithError(w, http.StatusBadRequest, "Worker name is required", fmt.Errorf("name is required"))
@@ -200,7 +241,7 @@ func (ws *WorkerHandler) AddWorkerDomain(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	_, err := ws.queries.AddWorkerDomain(r.Context(), repository.AddWorkerDomainParams{
+	_, err := wh.queries.AddWorkerDomain(r.Context(), repository.AddWorkerDomainParams{
 		Name:    name,
 		Column2: req.Domain,
 	})
@@ -216,7 +257,7 @@ func (ws *WorkerHandler) AddWorkerDomain(w http.ResponseWriter, r *http.Request)
 	functions.RespondwithJSON(w, http.StatusCreated, map[string]string{"message": "Domains added successfully"})
 }
 
-func (ws *WorkerHandler) DeleteWorkerDomain(w http.ResponseWriter, r *http.Request) {
+func (wh *WorkerHandler) DeleteWorkerDomain(w http.ResponseWriter, r *http.Request) {
 	name := chi.URLParam(r, "name")
 	if name == "" {
 		functions.RespondwithError(w, http.StatusBadRequest, "Worker name is required", fmt.Errorf("name is required"))
@@ -234,7 +275,7 @@ func (ws *WorkerHandler) DeleteWorkerDomain(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	err := ws.queries.DeleteWorkerDomain(r.Context(), repository.DeleteWorkerDomainParams{
+	err := wh.queries.DeleteWorkerDomain(r.Context(), repository.DeleteWorkerDomainParams{
 		Name:    name,
 		Column2: req.Domain,
 	})

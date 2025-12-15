@@ -30,16 +30,18 @@ func NewRouter(pool *sql.DB) http.Handler {
 	}))
 
 	q := repository.New(pool)
+	w := server.NewWorkerHandler(q, pool)
+	h := server.NewUserHandler(q, pool)
+	p := server.NewPoolHandler(q, pool)
 
-	router.Route("/api", func(r chi.Router) {
-		h := server.NewUserHandler(q, pool)
-		r.Mount("/users", h.Routes())
+	router.Route("/admin", func(r chi.Router) {
+		r.Mount("/users", h.AdminRoutes())
+		r.Mount("/pools", p.AdminRoutes())
+		r.Mount("/worker", w.AdminRoutes())
+	})
 
-		p := server.NewPoolHandler(q, pool)
-		r.Mount("/pools", p.Routes())
-
-		w := server.NewWorkerHandler(q, pool)
-		r.Mount("/worker", w.Routes())
+	router.Route("/worker", func(r chi.Router) {
+		r.Mount("/", w.WorkerRoutes())
 	})
 
 	return router

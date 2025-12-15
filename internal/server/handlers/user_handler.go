@@ -27,7 +27,7 @@ func NewUserHandler(q *repository.Queries, db *sql.DB) *UserHandler {
 	}
 }
 
-func (h *UserHandler) Routes() http.Handler {
+func (h *UserHandler) AdminRoutes() http.Handler {
 	r := chi.NewRouter()
 
 	r.Use(middleware.AdminAuthentication)

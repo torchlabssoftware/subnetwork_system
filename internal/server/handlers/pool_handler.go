@@ -26,7 +26,7 @@ func NewPoolHandler(queries *repository.Queries, db *sql.DB) *PoolHandler {
 	}
 }
 
-func (p *PoolHandler) Routes() http.Handler {
+func (p *PoolHandler) AdminRoutes() http.Handler {
 	r := chi.NewRouter()
 
 	r.Use(middleware.AdminAuthentication)

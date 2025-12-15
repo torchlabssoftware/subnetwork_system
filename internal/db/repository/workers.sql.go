@@ -157,6 +157,17 @@ func (q *Queries) GetAllWorkers(ctx context.Context) ([]GetAllWorkersRow, error)
 	return items, nil
 }
 
+const getWorkerById = `-- name: GetWorkerById :one
+SELECT w.id FROM worker w
+WHERE w.id = $1
+`
+
+func (q *Queries) GetWorkerById(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
+	row := q.db.QueryRowContext(ctx, getWorkerById, id)
+	err := row.Scan(&id)
+	return id, err
+}
+
 const getWorkerByName = `-- name: GetWorkerByName :one
 SELECT 
     w.id, 

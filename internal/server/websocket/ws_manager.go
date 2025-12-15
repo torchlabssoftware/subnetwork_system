@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/torchlabssoftware/subnetwork_system/internal/db/repository"
@@ -28,6 +29,7 @@ type WebsocketManager struct {
 	sync.RWMutex
 	Handlers map[string]EventHandler
 	queries  *repository.Queries
+	OtpMap   RetentionMap
 }
 
 func NewWebsocketManager(queries *repository.Queries) *WebsocketManager {
@@ -35,6 +37,7 @@ func NewWebsocketManager(queries *repository.Queries) *WebsocketManager {
 		Workers:  make(WorkerList),
 		Handlers: make(map[string]EventHandler),
 		queries:  queries,
+		OtpMap:   NewRetentionMap(context.Background(), 10*time.Second),
 	}
 	w.setupEventHandlers()
 	return w
