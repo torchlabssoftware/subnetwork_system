@@ -1,6 +1,6 @@
 -- name: CreateWorker :one
-INSERT INTO worker (name, region_id, ip_address)
-VALUES ($1,(SELECT id from region where region.name = $2), $3)
+INSERT INTO worker (name, region_id, ip_address, port, pool_id)
+VALUES ($1,(SELECT id from region where region.name = $2), $3, $4, $5)
 RETURNING *;
 
 -- name: GetAllWorkers :many
@@ -11,6 +11,8 @@ SELECT
     w.status, 
     w.last_seen, 
     w.created_at, 
+    w.port,
+    w.pool_id,
     r.name AS region_name,
     COALESCE(array_agg(wd.domain) FILTER (WHERE wd.domain IS NOT NULL), '{}')::text[] AS domains
 FROM worker w
@@ -26,6 +28,8 @@ SELECT
     w.status, 
     w.last_seen, 
     w.created_at, 
+    w.port,
+    w.pool_id,
     r.name AS region_name,
     COALESCE(array_agg(wd.domain) FILTER (WHERE wd.domain IS NOT NULL), '{}')::text[] AS domains
 FROM worker w

@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi"
+	"github.com/google/uuid"
 
 	"github.com/torchlabssoftware/subnetwork_system/internal/db/repository"
 	functions "github.com/torchlabssoftware/subnetwork_system/internal/server/functions"
@@ -68,11 +69,21 @@ func (ws *WorkerHandler) AddWorker(w http.ResponseWriter, r *http.Request) {
 		functions.RespondwithError(w, http.StatusBadRequest, "IPAddress is required", fmt.Errorf("ip_address is required"))
 		return
 	}
+	if req.Port == nil || *req.Port == 0 {
+		functions.RespondwithError(w, http.StatusBadRequest, "Port is required", fmt.Errorf("port is required"))
+		return
+	}
+	if req.PoolId == nil || *req.PoolId == uuid.Nil {
+		functions.RespondwithError(w, http.StatusBadRequest, "PoolId is required", fmt.Errorf("pool_id is required"))
+		return
+	}
 
 	worker, err := ws.queries.CreateWorker(r.Context(), repository.CreateWorkerParams{
 		Name:      *req.Name,
 		Name_2:    *req.RegionName,
 		IpAddress: *req.IPAddress,
+		Port:      *req.Port,
+		PoolID:    *req.PoolId,
 	})
 	if err != nil {
 		functions.RespondwithError(w, http.StatusInternalServerError, "Failed to create worker", err)
@@ -85,9 +96,10 @@ func (ws *WorkerHandler) AddWorker(w http.ResponseWriter, r *http.Request) {
 		RegionName: *req.RegionName,
 		IpAddress:  worker.IpAddress,
 		Status:     worker.Status,
+		Port:       worker.Port,
+		PoolId:     worker.PoolID,
 		LastSeen:   worker.LastSeen.Format("2006-01-02T15:04:05.999999Z"),
 		CreatedAt:  worker.CreatedAt.Format("2006-01-02T15:04:05.999999Z"),
-		UpdatedAt:  worker.UpdatedAt.Format("2006-01-02T15:04:05.999999Z"),
 		Domains:    []string{},
 	}
 
@@ -110,9 +122,10 @@ func (ws *WorkerHandler) GetAllWorkers(w http.ResponseWriter, r *http.Request) {
 			RegionName: worker.RegionName,
 			IpAddress:  worker.IpAddress,
 			Status:     worker.Status,
+			Port:       worker.Port,
+			PoolId:     worker.PoolID,
 			LastSeen:   worker.LastSeen.Format("2006-01-02T15:04:05.999999Z"),
 			CreatedAt:  worker.CreatedAt.Format("2006-01-02T15:04:05.999999Z"),
-			UpdatedAt:  worker.UpdatedAt.Format("2006-01-02T15:04:05.999999Z"),
 			Domains:    worker.Domains,
 		})
 	}
@@ -143,9 +156,10 @@ func (ws *WorkerHandler) GetWorkerByName(w http.ResponseWriter, r *http.Request)
 		RegionName: worker.RegionName,
 		IpAddress:  worker.IpAddress,
 		Status:     worker.Status,
+		Port:       worker.Port,
+		PoolId:     worker.PoolID,
 		LastSeen:   worker.LastSeen.Format("2006-01-02T15:04:05.999999Z"),
 		CreatedAt:  worker.CreatedAt.Format("2006-01-02T15:04:05.999999Z"),
-		UpdatedAt:  worker.UpdatedAt.Format("2006-01-02T15:04:05.999999Z"),
 		Domains:    worker.Domains,
 	}
 
