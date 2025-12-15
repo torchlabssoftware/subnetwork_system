@@ -66,7 +66,6 @@ func (p *PoolHandler) getRegions(w http.ResponseWriter, r *http.Request) {
 			Id:        region.ID,
 			Name:      region.Name,
 			CreatedAt: region.CreatedAt,
-			UpdatedAt: region.UpdatedAt,
 		}
 
 		res = append(res, r)
@@ -97,7 +96,6 @@ func (p *PoolHandler) createRegion(w http.ResponseWriter, r *http.Request) {
 		Id:        region.ID,
 		Name:      region.Name,
 		CreatedAt: region.CreatedAt,
-		UpdatedAt: region.UpdatedAt,
 	}
 
 	functions.RespondwithJSON(w, http.StatusCreated, res)
@@ -142,7 +140,6 @@ func (p *PoolHandler) getcountries(w http.ResponseWriter, r *http.Request) {
 			Code:      country.Code,
 			RegionId:  country.RegionID,
 			CreatedAt: country.CreatedAt,
-			UpdatedAt: country.UpdatedAt,
 		}
 
 		res = append(res, r)
@@ -181,7 +178,6 @@ func (p *PoolHandler) createCountry(w http.ResponseWriter, r *http.Request) {
 		Code:      country.Code,
 		RegionId:  country.RegionID,
 		CreatedAt: country.CreatedAt,
-		UpdatedAt: country.UpdatedAt,
 	}
 
 	functions.RespondwithJSON(w, http.StatusCreated, res)
@@ -228,7 +224,6 @@ func (p *PoolHandler) getUpstreams(w http.ResponseWriter, r *http.Request) {
 			Domain:           upstream.Domain,
 			Port:             int(upstream.Port),
 			CreatedAt:        upstream.CreatedAt,
-			UpdatedAt:        upstream.UpdatedAt,
 		}
 
 		res = append(res, r)
@@ -275,7 +270,6 @@ func (p *PoolHandler) createUpstream(w http.ResponseWriter, r *http.Request) {
 		Port:             int(upstream.Port),
 		Domain:           upstream.Domain,
 		CreatedAt:        upstream.CreatedAt,
-		UpdatedAt:        upstream.UpdatedAt,
 	}
 
 	functions.RespondwithJSON(w, http.StatusCreated, res)
@@ -323,13 +317,7 @@ func (p *PoolHandler) createPool(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if (req.Name == nil && *req.Name == "") || (req.Tag == nil && *req.Tag == "") || req.RegionId == nil || (req.Subdomain == nil && *req.Subdomain == "") || (req.Port == nil) || req.UpStreams == nil {
-		functions.RespondwithError(w, http.StatusBadRequest, "err in request body", fmt.Errorf("err in request body"))
-		return
-	}
-
 	args := repository.InsetPoolParams{
-		Name:      *req.Name,
 		Tag:       *req.Tag,
 		RegionID:  *req.RegionId,
 		Subdomain: *req.Subdomain,
@@ -378,7 +366,6 @@ func (p *PoolHandler) createPool(w http.ResponseWriter, r *http.Request) {
 	}
 	res := models.CreatePoolResponce{
 		Id:        pool.ID,
-		Name:      &pool.Name,
 		Tag:       &pool.Tag,
 		RegionId:  &pool.RegionID,
 		Subdomain: &pool.Subdomain,
@@ -409,7 +396,6 @@ func (p *PoolHandler) getPools(w http.ResponseWriter, r *http.Request) {
 		if !exists {
 			pool = &models.GetPoolsResponse{
 				Id:        row.PoolID,
-				Name:      row.PoolName,
 				Tag:       row.PoolTag,
 				Subdomain: row.PoolSubdomain,
 				Port:      row.PoolPort,
@@ -462,7 +448,6 @@ func (p *PoolHandler) getPoolByTag(w http.ResponseWriter, r *http.Request) {
 		if poolResponse == nil {
 			poolResponse = &models.GetPoolsResponse{
 				Id:        row.PoolID,
-				Name:      row.PoolName,
 				Tag:       row.PoolTag,
 				Subdomain: row.PoolSubdomain,
 				Port:      row.PoolPort,
@@ -496,11 +481,6 @@ func (p *PoolHandler) updatePool(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	name := sql.NullString{Valid: false}
-	if req.Name != nil {
-		name = sql.NullString{String: *req.Name, Valid: true}
-	}
-
 	regionId := uuid.NullUUID{Valid: false}
 	if req.RegionId != nil {
 		regionId = uuid.NullUUID{UUID: *req.RegionId, Valid: true}
@@ -518,7 +498,6 @@ func (p *PoolHandler) updatePool(w http.ResponseWriter, r *http.Request) {
 
 	args := repository.UpdatePoolParams{
 		Tag:       tagStr,
-		Name:      name,
 		RegionID:  regionId,
 		Subdomain: subdomain,
 		Port:      port,
@@ -536,7 +515,6 @@ func (p *PoolHandler) updatePool(w http.ResponseWriter, r *http.Request) {
 
 	res := models.CreatePoolResponce{
 		Id:        updatedPool.ID,
-		Name:      &updatedPool.Name,
 		Tag:       &updatedPool.Tag,
 		RegionId:  &updatedPool.RegionID,
 		Subdomain: &updatedPool.Subdomain,

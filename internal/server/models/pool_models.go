@@ -10,7 +10,6 @@ type GetRegionResponce struct {
 	Id        uuid.UUID `json:"id"`
 	Name      string    `json:"name,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at "`
 }
 
 type CreateRegionRequest struct {
@@ -21,7 +20,6 @@ type CreateRegionResponce struct {
 	Id        uuid.UUID `json:"id"`
 	Name      string    `json:"name,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at "`
 }
 
 type DeleteRegionRequest struct {
@@ -34,7 +32,6 @@ type GetCountryResponce struct {
 	Code      string    `json:"code,omitempty"`
 	RegionId  uuid.UUID `json:"region_id,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at "`
 }
 
 type CreateCountryRequest struct {
@@ -49,7 +46,6 @@ type CreateCountryResponce struct {
 	Code      string    `json:"code,omitempty"`
 	RegionId  uuid.UUID `json:"region_id,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at "`
 }
 
 type DeleteCountryRequest struct {
@@ -64,7 +60,6 @@ type GetUpstreamResponce struct {
 	Port             int       `json:"port"`
 	Domain           string    `json:"domain"`
 	CreatedAt        time.Time `json:"created_at"`
-	UpdatedAt        time.Time `json:"updated_at "`
 }
 
 type CreateUpstreamRequest struct {
@@ -83,7 +78,6 @@ type CreateUpstreamResponce struct {
 	Port             int       `json:"port"`
 	Domain           string    `json:"domain"`
 	CreatedAt        time.Time `json:"created_at"`
-	UpdatedAt        time.Time `json:"updated_at "`
 }
 
 type DeleteUpstreamRequest struct {
@@ -91,7 +85,6 @@ type DeleteUpstreamRequest struct {
 }
 
 type CreatePoolRequest struct {
-	Name      *string                        `json:"name"`
 	Tag       *string                        `json:"tag"`
 	RegionId  *uuid.UUID                     `json:"region_id"`
 	Subdomain *string                        `json:"subdomain"`
@@ -111,7 +104,6 @@ type CreateUpstreamWeightResponce struct {
 
 type CreatePoolResponce struct {
 	Id        uuid.UUID                       `json:"id,omitempty"`
-	Name      *string                         `json:"name,omitempty"`
 	Tag       *string                         `json:"tag,omitempty"`
 	RegionId  *uuid.UUID                      `json:"region_id,omitempty"`
 	Subdomain *string                         `json:"subdomain,omitempty"`
@@ -130,7 +122,6 @@ type PoolUpstream struct {
 
 type GetPoolsResponse struct {
 	Id        uuid.UUID      `json:"id,omitempty"`
-	Name      string         `json:"name,omitempty"`
 	Tag       string         `json:"tag,omitempty"`
 	Subdomain string         `json:"subdomain,omitempty"`
 	Port      int32          `json:"port,omitempty"`
@@ -138,7 +129,6 @@ type GetPoolsResponse struct {
 }
 
 type UpdatePoolRequest struct {
-	Name      *string    `json:"name"`
 	RegionId  *uuid.UUID `json:"region_id"`
 	Subdomain *string    `json:"subdomain"`
 	Port      *int32     `json:"port"`
