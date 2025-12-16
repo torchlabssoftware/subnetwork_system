@@ -15,6 +15,7 @@ type UserService interface {
 	GetUserByID(ctx context.Context, id uuid.UUID) (response *models.GetUserByIdResponce, code int, message string, err error)
 	GetUsers(ctx context.Context) (response []models.GetUserByIdResponce, code int, message string, err error)
 	UpdateUserStatus(ctx context.Context, id uuid.UUID, req *models.UpdateUserRequest) (response *models.UpdateUserResponce, code int, message string, err error)
+	DeleteUser(ctx context.Context, id uuid.UUID) (code int, message string, err error)
 }
 
 type userService struct {
@@ -175,4 +176,15 @@ func (u *userService) UpdateUserStatus(ctx context.Context, id uuid.UUID, req *m
 	}
 
 	return response, http.StatusOK, "", nil
+}
+
+func (u *userService) DeleteUser(ctx context.Context, id uuid.UUID) (code int, message string, err error) {
+	err = u.queries.DeleteUser(ctx, id)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return http.StatusNotFound, "user not found", err
+		}
+		return http.StatusInternalServerError, "server error", err
+	}
+	return http.StatusOK, "user deleted", nil
 }

@@ -42,7 +42,7 @@ func (m *MockUserService) GetUsers(ctx context.Context) ([]models.GetUserByIdRes
 	return resp, args.Int(1), args.String(2), args.Error(3)
 }
 
-func (m *MockUserService) UpdateUser(ctx context.Context, id uuid.UUID, req *models.UpdateUserRequest) (*models.UpdateUserResponce, int, string, error) {
+func (m *MockUserService) UpdateUserStatus(ctx context.Context, id uuid.UUID, req *models.UpdateUserRequest) (*models.UpdateUserResponce, int, string, error) {
 	args := m.Called(ctx, id, req)
 
 	var resp *models.UpdateUserResponce
@@ -50,4 +50,9 @@ func (m *MockUserService) UpdateUser(ctx context.Context, id uuid.UUID, req *mod
 		resp = args.Get(0).(*models.UpdateUserResponce)
 	}
 	return resp, args.Int(1), args.String(2), args.Error(3)
+}
+
+func (m *MockUserService) DeleteUser(ctx context.Context, id uuid.UUID) (int, string, error) {
+	args := m.Called(ctx, id)
+	return args.Int(0), args.String(1), args.Error(2)
 }

@@ -150,8 +150,9 @@ func (h *UserHandler) deleteUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.queries.SoftDeleteUser(r.Context(), id); err != nil {
-		functions.RespondwithError(w, http.StatusInternalServerError, "server error", err)
+	code, message, err := h.service.DeleteUser(r.Context(), id)
+	if err != nil {
+		functions.RespondwithError(w, code, message, err)
 		return
 	}
 
