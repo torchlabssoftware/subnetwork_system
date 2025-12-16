@@ -14,6 +14,7 @@ type UserService interface {
 	CreateUser(ctx context.Context, user *models.CreateUserRequest) (responce *models.CreateUserResponce, code int, message string, err error)
 	GetUserByID(ctx context.Context, id uuid.UUID) (response *models.GetUserByIdResponce, code int, message string, err error)
 	GetUsers(ctx context.Context) (response []models.GetUserByIdResponce, code int, message string, err error)
+	UpdateUserStatus(ctx context.Context, id uuid.UUID, req *models.UpdateUserRequest) (response *models.UpdateUserResponce, code int, message string, err error)
 }
 
 type userService struct {
@@ -147,5 +148,31 @@ func (u *userService) GetUsers(ctx context.Context) (response []models.GetUserBy
 			Updated_at:  user.UpdatedAt,
 		})
 	}
+	return response, http.StatusOK, "", nil
+}
+
+func (u *userService) UpdateUserStatus(ctx context.Context, id uuid.UUID, req *models.UpdateUserRequest) (response *models.UpdateUserResponce, code int, message string, err error) {
+	params := repository.UpdateUserParams{
+		ID: id,
+	}
+
+	if req.Status != nil && *req.Status != "" {
+		params.Status = sql.NullString{String: *req.Status, Valid: true}
+	}
+
+	user, err := u.queries.UpdateUser(ctx, params)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, http.StatusNotFound, "user not found", err
+		}
+		return nil, http.StatusInternalServerError, "server error", err
+	}
+
+	response = &models.UpdateUserResponce{
+		Id:        user.ID,
+		Status:    user.Status,
+		UpdatedAt: user.UpdatedAt,
+	}
+
 	return response, http.StatusOK, "", nil
 }

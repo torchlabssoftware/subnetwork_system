@@ -37,7 +37,7 @@ func (h *UserHandler) AdminRoutes() http.Handler {
 	r.Post("/", h.createUser)
 	r.Get("/", h.getUsers)
 	r.Get("/{id}", h.getUserbyId)
-	r.Patch("/{id}", h.updateUser)
+	r.Patch("/{id}", h.UpdateUserStatus)
 	r.Delete("/{id}", h.deleteUser)
 	r.Get("/{id}/data-usage", h.getDataUsage)
 	r.Get("/{id}/pools", h.getUserAllowPools)
@@ -57,7 +57,7 @@ func (h *UserHandler) TestRoutes() http.Handler {
 	r.Post("/", h.createUser)
 	r.Get("/", h.getUsers)
 	r.Get("/{id}", h.getUserbyId)
-	r.Patch("/{id}", h.updateUser)
+	r.Patch("/{id}", h.UpdateUserStatus)
 	r.Delete("/{id}", h.deleteUser)
 	r.Get("/{id}/data-usage", h.getDataUsage)
 	r.Get("/{id}/pools", h.getUserAllowPools)
@@ -117,7 +117,7 @@ func (h *UserHandler) getUsers(w http.ResponseWriter, r *http.Request) {
 	functions.RespondwithJSON(w, http.StatusOK, response)
 }
 
-func (h *UserHandler) updateUser(w http.ResponseWriter, r *http.Request) {
+func (h *UserHandler) UpdateUserStatus(w http.ResponseWriter, r *http.Request) {
 	//get the user id
 	userId := chi.URLParam(r, "id")
 	id, err := uuid.Parse(userId)
@@ -132,27 +132,13 @@ func (h *UserHandler) updateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	params := repository.UpdateUserParams{
-		ID: id,
-	}
-
-	if req.Status != nil && *req.Status != "" {
-		params.Status = sql.NullString{String: *req.Status, Valid: true}
-	}
-
-	user, err := h.queries.UpdateUser(r.Context(), params)
+	response, code, message, err := h.service.UpdateUserStatus(r.Context(), id, &req)
 	if err != nil {
-		functions.RespondwithError(w, http.StatusInternalServerError, "server error", err)
+		functions.RespondwithError(w, code, message, err)
 		return
 	}
 
-	resp := models.UpdateUserResponce{
-		Id:        user.ID,
-		Status:    user.Status,
-		UpdatedAt: user.UpdatedAt,
-	}
-
-	functions.RespondwithJSON(w, http.StatusOK, resp)
+	functions.RespondwithJSON(w, http.StatusOK, *response)
 }
 
 func (h *UserHandler) deleteUser(w http.ResponseWriter, r *http.Request) {
