@@ -12,6 +12,8 @@ import (
 
 type UserService interface {
 	CreateUser(ctx context.Context, user *models.CreateUserRequest) (responce *models.CreateUserResponce, code int, message string, err error)
+	GetUserByID(ctx context.Context, id uuid.UUID) (response *models.GetUserByIdResponce, code int, message string, err error)
+	GetUsers(ctx context.Context) (response []models.GetUserByIdResponce, code int, message string, err error)
 }
 
 type userService struct {
@@ -101,4 +103,49 @@ func (u *userService) CreateUser(context context.Context, req *models.CreateUser
 	}
 
 	return responce, http.StatusCreated, "user created", nil
+}
+
+func (u *userService) GetUserByID(ctx context.Context, id uuid.UUID) (response *models.GetUserByIdResponce, code int, message string, err error) {
+	user, err := u.queries.GetUserbyId(ctx, id)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, http.StatusNotFound, "user not found", err
+		}
+		return nil, http.StatusInternalServerError, "cant get user by id", err
+	}
+
+	response = &models.GetUserByIdResponce{
+		Id:          user.ID,
+		Username:    user.Username,
+		Password:    user.Password,
+		Status:      user.Status,
+		IpWhitelist: user.IpWhitelist,
+		UserPool:    user.Pools,
+		Created_at:  user.CreatedAt,
+		Updated_at:  user.UpdatedAt,
+	}
+
+	return response, http.StatusOK, "", nil
+}
+
+func (u *userService) GetUsers(ctx context.Context) (response []models.GetUserByIdResponce, code int, message string, err error) {
+	users, err := u.queries.GetAllusers(ctx)
+	if err != nil {
+		return nil, http.StatusInternalServerError, "cant get users", err
+	}
+
+	response = []models.GetUserByIdResponce{}
+	for _, user := range users {
+		response = append(response, models.GetUserByIdResponce{
+			Id:          user.ID,
+			Username:    user.Username,
+			Password:    user.Password,
+			Status:      user.Status,
+			IpWhitelist: user.IpWhitelist,
+			UserPool:    user.Pools,
+			Created_at:  user.CreatedAt,
+			Updated_at:  user.UpdatedAt,
+		})
+	}
+	return response, http.StatusOK, "", nil
 }

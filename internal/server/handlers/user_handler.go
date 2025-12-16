@@ -97,50 +97,24 @@ func (h *UserHandler) getUserbyId(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := h.queries.GetUserbyId(r.Context(), userIdUUID)
+	response, code, message, err := h.service.GetUserByID(r.Context(), userIdUUID)
 	if err != nil {
-		functions.RespondwithError(w, http.StatusInternalServerError, "cant get user by id", err)
+		functions.RespondwithError(w, code, message, err)
 		return
 	}
 
-	resp := models.GetUserByIdResponce{
-		Id:          user.ID,
-		Username:    user.Username,
-		Password:    user.Password,
-		Status:      user.Status,
-		IpWhitelist: user.IpWhitelist,
-		UserPool:    user.Pools,
-		Created_at:  user.CreatedAt,
-		Updated_at:  user.UpdatedAt,
-	}
-
-	functions.RespondwithJSON(w, http.StatusOK, resp)
+	functions.RespondwithJSON(w, http.StatusOK, *response)
 }
 
 func (h *UserHandler) getUsers(w http.ResponseWriter, r *http.Request) {
 
-	users, err := h.queries.GetAllusers(r.Context())
+	response, code, message, err := h.service.GetUsers(r.Context())
 	if err != nil {
-		functions.RespondwithError(w, http.StatusInternalServerError, "cant get users by id", err)
+		functions.RespondwithError(w, code, message, err)
 		return
 	}
 
-	resp := []models.GetUserByIdResponce{}
-
-	for _, user := range users {
-		resp = append(resp, models.GetUserByIdResponce{
-			Id:          user.ID,
-			Username:    user.Username,
-			Password:    user.Password,
-			Status:      user.Status,
-			IpWhitelist: user.IpWhitelist,
-			UserPool:    user.Pools,
-			Created_at:  user.CreatedAt,
-			Updated_at:  user.UpdatedAt,
-		})
-	}
-
-	functions.RespondwithJSON(w, http.StatusOK, resp)
+	functions.RespondwithJSON(w, http.StatusOK, response)
 }
 
 func (h *UserHandler) updateUser(w http.ResponseWriter, r *http.Request) {

@@ -3,6 +3,7 @@ package mocks
 import (
 	"context"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/mock"
 	models "github.com/torchlabssoftware/subnetwork_system/internal/server/models"
 )
@@ -17,6 +18,26 @@ func (m *MockUserService) CreateUser(ctx context.Context, user *models.CreateUse
 	var resp *models.CreateUserResponce
 	if args.Get(0) != nil {
 		resp = args.Get(0).(*models.CreateUserResponce)
+	}
+	return resp, args.Int(1), args.String(2), args.Error(3)
+}
+
+func (m *MockUserService) GetUserByID(ctx context.Context, id uuid.UUID) (*models.GetUserByIdResponce, int, string, error) {
+	args := m.Called(ctx, id)
+
+	var resp *models.GetUserByIdResponce
+	if args.Get(0) != nil {
+		resp = args.Get(0).(*models.GetUserByIdResponce)
+	}
+	return resp, args.Int(1), args.String(2), args.Error(3)
+}
+
+func (m *MockUserService) GetUsers(ctx context.Context) ([]models.GetUserByIdResponce, int, string, error) {
+	args := m.Called(ctx)
+
+	var resp []models.GetUserByIdResponce
+	if args.Get(0) != nil {
+		resp = args.Get(0).([]models.GetUserByIdResponce)
 	}
 	return resp, args.Int(1), args.String(2), args.Error(3)
 }
