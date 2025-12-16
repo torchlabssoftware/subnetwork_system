@@ -70,6 +70,17 @@ func (h *UserHandler) TestRoutes() http.Handler {
 	return r
 }
 
+// CreateUser creates a new user
+// @Summary      Create a new user
+// @Description  Creates a user with optional IP whitelist and pool allowances
+// @Tags         users
+// @Accept       json
+// @Produce      json
+// @Param        request  body      models.CreateUserRequest  true  "Create User Request"
+// @Success      201      {object}  models.CreateUserResponce
+// @Failure      400      {object}  string  "Invalid request body"
+// @Failure      500      {object}  string  "Internal server error"
+// @Router       /admin/users [post]
 func (h *UserHandler) createUser(w http.ResponseWriter, r *http.Request) {
 	var req models.CreateUserRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

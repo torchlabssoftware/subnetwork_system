@@ -77,7 +77,7 @@ func TestCreateUser_Handler(t *testing.T) {
 		// Act
 		body, _ := json.Marshal(reqBody)
 		req, _ := http.NewRequest("POST", "/", bytes.NewBuffer(body))
-		req.Header.Set("Authorization", "ApiKey K9@pL2$mQ#z9jR!vN7kY&wB6tG*hF5dC")
+		req.Header.Set("Content-Type", "application/json")
 		rr := httptest.NewRecorder()
 
 		router.ServeHTTP(rr, req)

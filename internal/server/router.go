@@ -8,6 +8,8 @@ import (
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
 	"github.com/go-chi/cors"
+	httpSwagger "github.com/swaggo/http-swagger"
+	_ "github.com/torchlabssoftware/subnetwork_system/docs" // Setup docs import
 	"github.com/torchlabssoftware/subnetwork_system/internal/db/repository"
 	handlers "github.com/torchlabssoftware/subnetwork_system/internal/server/handlers"
 	service "github.com/torchlabssoftware/subnetwork_system/internal/server/service"
@@ -44,6 +46,9 @@ func NewRouter(pool *sql.DB) http.Handler {
 	router.Route("/worker", func(r chi.Router) {
 		r.Mount("/", w.WorkerRoutes())
 	})
+
+	// Swagger Endpoint
+	router.Get("/swagger/*", httpSwagger.WrapHandler)
 
 	return router
 
