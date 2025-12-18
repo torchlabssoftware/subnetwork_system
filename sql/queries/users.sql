@@ -9,7 +9,9 @@ WITH inserted AS (
     SELECT sqlc.arg('user_id'),UNNEST(sqlc.arg('ip_whitelist')::text[])
     RETURNING ip_cidr
 )
-SELECT sqlc.arg('user_id')::UUID AS user_id,ARRAY_AGG(ip_cidr)::TEXT[] AS ip_whitelist FROM inserted;
+SELECT 
+sqlc.arg('user_id')::UUID AS user_id,
+ARRAY_AGG(ip_cidr)::TEXT[] AS ip_whitelist FROM inserted;
 
 -- name: GetUserbyId :one
 SELECT 
@@ -52,11 +54,8 @@ updated_at = CURRENT_TIMESTAMP
 WHERE id = $1
 RETURNING *;
 
--- name: SoftDeleteUser :exec
-UPDATE "user" 
-SET 
-status = 'deleted',
-updated_at = CURRENT_TIMESTAMP
+-- name: DeleteUser :exec
+DELETE FROM "user"
 WHERE id = $1;
 
 -- name: GetDatausageById :many
@@ -67,12 +66,12 @@ WHERE up.user_id = $1;
 
 -- name: GetUserPoolsByUserId :one
 select u.id,
-    COALESCE(ARRAY_AGG(DISTINCT up.pool_id) FILTER (WHERE up.pool_id IS NOT NULL),'{}')::TEXT[] as pool_ids,
-    COALESCE(ARRAY_AGG(up.data_limit) FILTER (WHERE up.data_limit IS NOT NULL),'{}')::BIGINT[] AS data_limits,
-    COALESCE(ARRAY_AGG(up.data_usage) FILTER (WHERE up.data_usage IS NOT NULL),'{}')::BIGINT[]  AS data_usages
+    COALESCE(ARRAY_AGG(DISTINCT p.tag) FILTER (WHERE p.tag IS NOT NULL),'{}')::TEXT[] as pool_tags
 from  "user" as u
-join user_pools as up
+left join user_pools as up
 on u.id = up.user_id
+left join pool as p
+on up.pool_id = p.id
 WHERE u.id = $1
 group by u.id;
 
@@ -90,13 +89,13 @@ inserted_rows AS (
 )
 SELECT 
     i.user_id, 
-    ARRAY_AGG(p.tag)::TEXT[] AS inserted_tags,
-    ARRAY_AGG(i.data_limit)::BIGINT[] AS inserted_data_limits
+    COALESCE(ARRAY_AGG(p.tag), '{}')::TEXT[] AS inserted_tags,
+    COALESCE(ARRAY_AGG(i.data_limit), '{}')::BIGINT[] AS inserted_data_limits
 FROM inserted_rows i
 JOIN matching_pools p ON i.pool_id = p.id
 GROUP BY i.user_id;
 
--- name: DeleteUserPoolsByTags :exec
+-- name: DeleteUserPoolsByTags :execresult
 DELETE FROM user_pools
 WHERE user_id = $1
   AND pool_id IN (
@@ -107,7 +106,6 @@ WHERE user_id = $1
 
 -- name: GetUserIpwhitelistByUserId :one
 SELECT 
-    u.id AS user_id, 
     COALESCE(
         ARRAY_AGG(DISTINCT w.ip_cidr) FILTER (WHERE w.ip_cidr IS NOT NULL), 
         '{}'
@@ -118,7 +116,7 @@ LEFT JOIN user_ip_whitelist w
 WHERE u.id = $1
 GROUP BY u.id;
 
--- name: DeleteUserIpwhitelist :exec
+-- name: DeleteUserIpwhitelist :execresult
 DELETE FROM user_ip_whitelist
 WHERE user_id = $1
   AND ip_cidr = ANY($2::TEXT[]);

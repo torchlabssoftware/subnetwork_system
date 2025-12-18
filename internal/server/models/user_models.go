@@ -56,8 +56,7 @@ type PoolDataStat struct {
 }
 
 type GetUserPoolResponce struct {
-	UserId uuid.UUID      `json:"user_id"`
-	Pools  []PoolDataStat `json:"pools"`
+	Pools []string `json:"pools"`
 }
 
 type AddUserPoolRequest struct {
@@ -65,7 +64,6 @@ type AddUserPoolRequest struct {
 }
 
 type AddUserPoolResponce struct {
-	UserId   uuid.UUID      `json:"user_id,omitempty"`
 	UserPool []PoolDataStat `json:"user_pool,omitempty"`
 }
 
@@ -74,8 +72,7 @@ type DeleteUserpoolRequest struct {
 }
 
 type GetUserIpwhitelistResponce struct {
-	UserId      uuid.UUID `json:"user_id"`
-	IpWhitelist []string  `json:"ip_whitelist"`
+	IpWhitelist []string `json:"ip_whitelist"`
 }
 
 type AddUserIpwhitelistRequest struct {
@@ -83,8 +80,7 @@ type AddUserIpwhitelistRequest struct {
 }
 
 type AddUserIpwhitelistResponce struct {
-	UserId      uuid.UUID `json:"user_id,omitempty"`
-	IpWhitelist []string  `json:"ip_whitelist,omitempty"`
+	IpWhitelist []string `json:"ip_whitelist,omitempty"`
 }
 
 type DeleteUserIpwhitelistRequest struct {

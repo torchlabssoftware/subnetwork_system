@@ -6,6 +6,7 @@ package repository
 
 import (
 	"context"
+	"database/sql"
 
 	"github.com/google/uuid"
 )
@@ -24,8 +25,9 @@ type Querier interface {
 	DeletePoolUpstreamWeight(ctx context.Context, arg DeletePoolUpstreamWeightParams) error
 	DeleteRegion(ctx context.Context, name string) error
 	DeleteUpstream(ctx context.Context, id uuid.UUID) error
-	DeleteUserIpwhitelist(ctx context.Context, arg DeleteUserIpwhitelistParams) error
-	DeleteUserPoolsByTags(ctx context.Context, arg DeleteUserPoolsByTagsParams) error
+	DeleteUser(ctx context.Context, id uuid.UUID) error
+	DeleteUserIpwhitelist(ctx context.Context, arg DeleteUserIpwhitelistParams) (sql.Result, error)
+	DeleteUserPoolsByTags(ctx context.Context, arg DeleteUserPoolsByTagsParams) (sql.Result, error)
 	DeleteWorkerByName(ctx context.Context, name string) error
 	DeleteWorkerDomain(ctx context.Context, arg DeleteWorkerDomainParams) error
 	GenerateproxyString(ctx context.Context, arg GenerateproxyStringParams) (GenerateproxyStringRow, error)
@@ -37,7 +39,7 @@ type Querier interface {
 	GetRegions(ctx context.Context) ([]Region, error)
 	GetUpstreams(ctx context.Context) ([]Upstream, error)
 	GetUserByUsername(ctx context.Context, username string) (User, error)
-	GetUserIpwhitelistByUserId(ctx context.Context, id uuid.UUID) (GetUserIpwhitelistByUserIdRow, error)
+	GetUserIpwhitelistByUserId(ctx context.Context, id uuid.UUID) ([]string, error)
 	GetUserPoolsByUserId(ctx context.Context, id uuid.UUID) (GetUserPoolsByUserIdRow, error)
 	GetUserbyId(ctx context.Context, id uuid.UUID) (GetUserbyIdRow, error)
 	GetWorkerById(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
@@ -46,7 +48,6 @@ type Querier interface {
 	InsertUserIpwhitelist(ctx context.Context, arg InsertUserIpwhitelistParams) (InsertUserIpwhitelistRow, error)
 	InsetPool(ctx context.Context, arg InsetPoolParams) (Pool, error)
 	ListPoolsWithUpstreams(ctx context.Context) ([]ListPoolsWithUpstreamsRow, error)
-	SoftDeleteUser(ctx context.Context, id uuid.UUID) error
 	UpdatePool(ctx context.Context, arg UpdatePoolParams) (Pool, error)
 	UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error)
 }

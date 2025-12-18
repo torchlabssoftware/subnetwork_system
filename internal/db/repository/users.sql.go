@@ -28,8 +28,8 @@ inserted_rows AS (
 )
 SELECT 
     i.user_id, 
-    ARRAY_AGG(p.tag)::TEXT[] AS inserted_tags,
-    ARRAY_AGG(i.data_limit)::BIGINT[] AS inserted_data_limits
+    COALESCE(ARRAY_AGG(p.tag), '{}')::TEXT[] AS inserted_tags,
+    COALESCE(ARRAY_AGG(i.data_limit), '{}')::BIGINT[] AS inserted_data_limits
 FROM inserted_rows i
 JOIN matching_pools p ON i.pool_id = p.id
 GROUP BY i.user_id
@@ -79,7 +79,17 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 	return i, err
 }
 
-const deleteUserIpwhitelist = `-- name: DeleteUserIpwhitelist :exec
+const deleteUser = `-- name: DeleteUser :exec
+DELETE FROM "user"
+WHERE id = $1
+`
+
+func (q *Queries) DeleteUser(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, deleteUser, id)
+	return err
+}
+
+const deleteUserIpwhitelist = `-- name: DeleteUserIpwhitelist :execresult
 DELETE FROM user_ip_whitelist
 WHERE user_id = $1
   AND ip_cidr = ANY($2::TEXT[])
@@ -90,12 +100,11 @@ type DeleteUserIpwhitelistParams struct {
 	Column2 []string
 }
 
-func (q *Queries) DeleteUserIpwhitelist(ctx context.Context, arg DeleteUserIpwhitelistParams) error {
-	_, err := q.db.ExecContext(ctx, deleteUserIpwhitelist, arg.UserID, pq.Array(arg.Column2))
-	return err
+func (q *Queries) DeleteUserIpwhitelist(ctx context.Context, arg DeleteUserIpwhitelistParams) (sql.Result, error) {
+	return q.db.ExecContext(ctx, deleteUserIpwhitelist, arg.UserID, pq.Array(arg.Column2))
 }
 
-const deleteUserPoolsByTags = `-- name: DeleteUserPoolsByTags :exec
+const deleteUserPoolsByTags = `-- name: DeleteUserPoolsByTags :execresult
 DELETE FROM user_pools
 WHERE user_id = $1
   AND pool_id IN (
@@ -110,9 +119,8 @@ type DeleteUserPoolsByTagsParams struct {
 	Column2 []string
 }
 
-func (q *Queries) DeleteUserPoolsByTags(ctx context.Context, arg DeleteUserPoolsByTagsParams) error {
-	_, err := q.db.ExecContext(ctx, deleteUserPoolsByTags, arg.UserID, pq.Array(arg.Column2))
-	return err
+func (q *Queries) DeleteUserPoolsByTags(ctx context.Context, arg DeleteUserPoolsByTagsParams) (sql.Result, error) {
+	return q.db.ExecContext(ctx, deleteUserPoolsByTags, arg.UserID, pq.Array(arg.Column2))
 }
 
 const generateproxyString = `-- name: GenerateproxyString :one
@@ -269,7 +277,6 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 
 const getUserIpwhitelistByUserId = `-- name: GetUserIpwhitelistByUserId :one
 SELECT 
-    u.id AS user_id, 
     COALESCE(
         ARRAY_AGG(DISTINCT w.ip_cidr) FILTER (WHERE w.ip_cidr IS NOT NULL), 
         '{}'
@@ -281,46 +288,34 @@ WHERE u.id = $1
 GROUP BY u.id
 `
 
-type GetUserIpwhitelistByUserIdRow struct {
-	UserID uuid.UUID
-	IpList []string
-}
-
-func (q *Queries) GetUserIpwhitelistByUserId(ctx context.Context, id uuid.UUID) (GetUserIpwhitelistByUserIdRow, error) {
+func (q *Queries) GetUserIpwhitelistByUserId(ctx context.Context, id uuid.UUID) ([]string, error) {
 	row := q.db.QueryRowContext(ctx, getUserIpwhitelistByUserId, id)
-	var i GetUserIpwhitelistByUserIdRow
-	err := row.Scan(&i.UserID, pq.Array(&i.IpList))
-	return i, err
+	var ip_list []string
+	err := row.Scan(pq.Array(&ip_list))
+	return ip_list, err
 }
 
 const getUserPoolsByUserId = `-- name: GetUserPoolsByUserId :one
 select u.id,
-    COALESCE(ARRAY_AGG(DISTINCT up.pool_id) FILTER (WHERE up.pool_id IS NOT NULL),'{}')::TEXT[] as pool_ids,
-    COALESCE(ARRAY_AGG(up.data_limit) FILTER (WHERE up.data_limit IS NOT NULL),'{}')::BIGINT[] AS data_limits,
-    COALESCE(ARRAY_AGG(up.data_usage) FILTER (WHERE up.data_usage IS NOT NULL),'{}')::BIGINT[]  AS data_usages
+    COALESCE(ARRAY_AGG(DISTINCT p.tag) FILTER (WHERE p.tag IS NOT NULL),'{}')::TEXT[] as pool_tags
 from  "user" as u
-join user_pools as up
+left join user_pools as up
 on u.id = up.user_id
+left join pool as p
+on up.pool_id = p.id
 WHERE u.id = $1
 group by u.id
 `
 
 type GetUserPoolsByUserIdRow struct {
-	ID         uuid.UUID
-	PoolIds    []string
-	DataLimits []int64
-	DataUsages []int64
+	ID       uuid.UUID
+	PoolTags []string
 }
 
 func (q *Queries) GetUserPoolsByUserId(ctx context.Context, id uuid.UUID) (GetUserPoolsByUserIdRow, error) {
 	row := q.db.QueryRowContext(ctx, getUserPoolsByUserId, id)
 	var i GetUserPoolsByUserIdRow
-	err := row.Scan(
-		&i.ID,
-		pq.Array(&i.PoolIds),
-		pq.Array(&i.DataLimits),
-		pq.Array(&i.DataUsages),
-	)
+	err := row.Scan(&i.ID, pq.Array(&i.PoolTags))
 	return i, err
 }
 
@@ -375,7 +370,9 @@ WITH inserted AS (
     SELECT $1,UNNEST($2::text[])
     RETURNING ip_cidr
 )
-SELECT $1::UUID AS user_id,ARRAY_AGG(ip_cidr)::TEXT[] AS ip_whitelist FROM inserted
+SELECT 
+$1::UUID AS user_id,
+ARRAY_AGG(ip_cidr)::TEXT[] AS ip_whitelist FROM inserted
 `
 
 type InsertUserIpwhitelistParams struct {
@@ -393,19 +390,6 @@ func (q *Queries) InsertUserIpwhitelist(ctx context.Context, arg InsertUserIpwhi
 	var i InsertUserIpwhitelistRow
 	err := row.Scan(&i.UserID, pq.Array(&i.IpWhitelist))
 	return i, err
-}
-
-const softDeleteUser = `-- name: SoftDeleteUser :exec
-UPDATE "user" 
-SET 
-status = 'deleted',
-updated_at = CURRENT_TIMESTAMP
-WHERE id = $1
-`
-
-func (q *Queries) SoftDeleteUser(ctx context.Context, id uuid.UUID) error {
-	_, err := q.db.ExecContext(ctx, softDeleteUser, id)
-	return err
 }
 
 const updateUser = `-- name: UpdateUser :one

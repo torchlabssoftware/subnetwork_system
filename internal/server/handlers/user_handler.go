@@ -37,7 +37,7 @@ func (h *UserHandler) AdminRoutes() http.Handler {
 	r.Post("/", h.createUser)
 	r.Get("/", h.getUsers)
 	r.Get("/{id}", h.getUserbyId)
-	r.Patch("/{id}", h.updateUser)
+	r.Patch("/{id}", h.UpdateUserStatus)
 	r.Delete("/{id}", h.deleteUser)
 	r.Get("/{id}/data-usage", h.getDataUsage)
 	r.Get("/{id}/pools", h.getUserAllowPools)
@@ -57,7 +57,7 @@ func (h *UserHandler) TestRoutes() http.Handler {
 	r.Post("/", h.createUser)
 	r.Get("/", h.getUsers)
 	r.Get("/{id}", h.getUserbyId)
-	r.Patch("/{id}", h.updateUser)
+	r.Patch("/{id}", h.UpdateUserStatus)
 	r.Delete("/{id}", h.deleteUser)
 	r.Get("/{id}/data-usage", h.getDataUsage)
 	r.Get("/{id}/pools", h.getUserAllowPools)
@@ -97,53 +97,27 @@ func (h *UserHandler) getUserbyId(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := h.queries.GetUserbyId(r.Context(), userIdUUID)
+	response, code, message, err := h.service.GetUserByID(r.Context(), userIdUUID)
 	if err != nil {
-		functions.RespondwithError(w, http.StatusInternalServerError, "cant get user by id", err)
+		functions.RespondwithError(w, code, message, err)
 		return
 	}
 
-	resp := models.GetUserByIdResponce{
-		Id:          user.ID,
-		Username:    user.Username,
-		Password:    user.Password,
-		Status:      user.Status,
-		IpWhitelist: user.IpWhitelist,
-		UserPool:    user.Pools,
-		Created_at:  user.CreatedAt,
-		Updated_at:  user.UpdatedAt,
-	}
-
-	functions.RespondwithJSON(w, http.StatusOK, resp)
+	functions.RespondwithJSON(w, http.StatusOK, *response)
 }
 
 func (h *UserHandler) getUsers(w http.ResponseWriter, r *http.Request) {
 
-	users, err := h.queries.GetAllusers(r.Context())
+	response, code, message, err := h.service.GetUsers(r.Context())
 	if err != nil {
-		functions.RespondwithError(w, http.StatusInternalServerError, "cant get users by id", err)
+		functions.RespondwithError(w, code, message, err)
 		return
 	}
 
-	resp := []models.GetUserByIdResponce{}
-
-	for _, user := range users {
-		resp = append(resp, models.GetUserByIdResponce{
-			Id:          user.ID,
-			Username:    user.Username,
-			Password:    user.Password,
-			Status:      user.Status,
-			IpWhitelist: user.IpWhitelist,
-			UserPool:    user.Pools,
-			Created_at:  user.CreatedAt,
-			Updated_at:  user.UpdatedAt,
-		})
-	}
-
-	functions.RespondwithJSON(w, http.StatusOK, resp)
+	functions.RespondwithJSON(w, http.StatusOK, response)
 }
 
-func (h *UserHandler) updateUser(w http.ResponseWriter, r *http.Request) {
+func (h *UserHandler) UpdateUserStatus(w http.ResponseWriter, r *http.Request) {
 	//get the user id
 	userId := chi.URLParam(r, "id")
 	id, err := uuid.Parse(userId)
@@ -158,27 +132,13 @@ func (h *UserHandler) updateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	params := repository.UpdateUserParams{
-		ID: id,
-	}
-
-	if req.Status != nil && *req.Status != "" {
-		params.Status = sql.NullString{String: *req.Status, Valid: true}
-	}
-
-	user, err := h.queries.UpdateUser(r.Context(), params)
+	response, code, message, err := h.service.UpdateUserStatus(r.Context(), id, &req)
 	if err != nil {
-		functions.RespondwithError(w, http.StatusInternalServerError, "server error", err)
+		functions.RespondwithError(w, code, message, err)
 		return
 	}
 
-	resp := models.UpdateUserResponce{
-		Id:        user.ID,
-		Status:    user.Status,
-		UpdatedAt: user.UpdatedAt,
-	}
-
-	functions.RespondwithJSON(w, http.StatusOK, resp)
+	functions.RespondwithJSON(w, http.StatusOK, *response)
 }
 
 func (h *UserHandler) deleteUser(w http.ResponseWriter, r *http.Request) {
@@ -190,8 +150,9 @@ func (h *UserHandler) deleteUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.queries.SoftDeleteUser(r.Context(), id); err != nil {
-		functions.RespondwithError(w, http.StatusInternalServerError, "server error", err)
+	code, message, err := h.service.DeleteUser(r.Context(), id)
+	if err != nil {
+		functions.RespondwithError(w, code, message, err)
 		return
 	}
 
@@ -213,23 +174,13 @@ func (h *UserHandler) getDataUsage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dataUsages, err := h.queries.GetDatausageById(r.Context(), id)
+	response, code, message, err := h.service.GetDataUsage(r.Context(), id)
 	if err != nil {
-		functions.RespondwithError(w, http.StatusInternalServerError, "server error", err)
+		functions.RespondwithError(w, code, message, err)
 		return
 	}
 
-	res := []models.GetDatausageReponce{}
-
-	for _, dataUsage := range dataUsages {
-		res = append(res, models.GetDatausageReponce{
-			DataLimit: dataUsage.DataLimit,
-			DataUsage: dataUsage.DataUsage,
-			PoolTag:   dataUsage.PoolTag,
-		})
-	}
-
-	functions.RespondwithJSON(w, http.StatusOK, res)
+	functions.RespondwithJSON(w, http.StatusOK, response)
 }
 
 func (h *UserHandler) getUserAllowPools(w http.ResponseWriter, r *http.Request) {
@@ -241,29 +192,13 @@ func (h *UserHandler) getUserAllowPools(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	userPool, err := h.queries.GetUserPoolsByUserId(r.Context(), id)
+	response, code, message, err := h.service.GetUserAllowPools(r.Context(), id)
 	if err != nil {
-		functions.RespondwithError(w, http.StatusInternalServerError, "server error", err)
+		functions.RespondwithError(w, code, message, err)
 		return
 	}
 
-	poolDataStat := []models.PoolDataStat{}
-
-	for i := range userPool.PoolIds {
-		poolDataStat = append(poolDataStat, models.PoolDataStat{
-			Pool:      userPool.PoolIds[i],
-			DataLimit: userPool.DataLimits[i],
-			DataUsage: userPool.DataUsages[i],
-		})
-	}
-
-	resp := models.GetUserPoolResponce{
-		UserId: userPool.ID,
-		Pools:  poolDataStat,
-	}
-
-	functions.RespondwithJSON(w, http.StatusOK, resp)
-
+	functions.RespondwithJSON(w, http.StatusOK, *response)
 }
 
 func (h *UserHandler) addUserAllowPool(w http.ResponseWriter, r *http.Request) {
@@ -281,41 +216,13 @@ func (h *UserHandler) addUserAllowPool(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tags := []string{}
-	dataLimits := []int64{}
-
-	for _, pool := range req.UserPool {
-		tags = append(tags, pool.Pool)
-		dataLimits = append(dataLimits, pool.DataLimit)
-	}
-
-	args := repository.AddUserPoolsByPoolTagsParams{
-		UserID:     id,
-		Tags:       tags,
-		DataLimits: dataLimits,
-	}
-
-	pool, err := h.queries.AddUserPoolsByPoolTags(r.Context(), args)
+	response, code, message, err := h.service.AddUserAllowPool(r.Context(), id, &req)
 	if err != nil {
-		functions.RespondwithError(w, http.StatusInternalServerError, "server error", err)
+		functions.RespondwithError(w, code, message, err)
 		return
 	}
 
-	userPool := []models.PoolDataStat{}
-
-	for i, d := range pool.InsertedDataLimits {
-		userPool = append(userPool, models.PoolDataStat{
-			Pool:      pool.InsertedTags[i],
-			DataLimit: d,
-		})
-	}
-
-	res := models.AddUserPoolResponce{
-		UserId:   id,
-		UserPool: userPool,
-	}
-
-	functions.RespondwithJSON(w, http.StatusCreated, res)
+	functions.RespondwithJSON(w, http.StatusCreated, *response)
 }
 
 func (h *UserHandler) removeUserAllowPool(w http.ResponseWriter, r *http.Request) {
@@ -333,18 +240,19 @@ func (h *UserHandler) removeUserAllowPool(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	arg := repository.DeleteUserPoolsByTagsParams{
-		UserID:  id,
-		Column2: req.UserPool,
-	}
-
-	err = h.queries.DeleteUserPoolsByTags(r.Context(), arg)
+	code, message, err := h.service.RemoveUserAllowPool(r.Context(), id, &req)
 	if err != nil {
-		functions.RespondwithError(w, http.StatusInternalServerError, "server error", err)
+		functions.RespondwithError(w, code, message, err)
 		return
 	}
 
-	functions.RespondwithJSON(w, http.StatusOK, nil)
+	res := struct {
+		Message string `json:"message"`
+	}{
+		Message: message,
+	}
+
+	functions.RespondwithJSON(w, code, res)
 }
 
 func (h *UserHandler) getUserIpWhitelist(w http.ResponseWriter, r *http.Request) {
@@ -356,18 +264,13 @@ func (h *UserHandler) getUserIpWhitelist(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	userPool, err := h.queries.GetUserIpwhitelistByUserId(r.Context(), id)
+	response, code, message, err := h.service.GetUserIpWhitelist(r.Context(), id)
 	if err != nil {
-		functions.RespondwithError(w, http.StatusInternalServerError, "server error", err)
+		functions.RespondwithError(w, code, message, err)
 		return
 	}
 
-	resp := models.GetUserIpwhitelistResponce{
-		UserId:      userPool.UserID,
-		IpWhitelist: userPool.IpList,
-	}
-
-	functions.RespondwithJSON(w, http.StatusOK, resp)
+	functions.RespondwithJSON(w, http.StatusOK, *response)
 
 }
 
@@ -386,23 +289,13 @@ func (h *UserHandler) addUserIpWhitelist(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	args := repository.InsertUserIpwhitelistParams{
-		UserID:      id,
-		IpWhitelist: req.IpWhitelist,
-	}
-
-	_, err = h.queries.InsertUserIpwhitelist(r.Context(), args)
+	response, code, message, err := h.service.AddUserIpWhitelist(r.Context(), id, &req)
 	if err != nil {
-		functions.RespondwithError(w, http.StatusInternalServerError, "server error", err)
+		functions.RespondwithError(w, code, message, err)
 		return
 	}
 
-	res := models.AddUserIpwhitelistResponce{
-		UserId:      id,
-		IpWhitelist: req.IpWhitelist,
-	}
-
-	functions.RespondwithJSON(w, http.StatusCreated, res)
+	functions.RespondwithJSON(w, http.StatusCreated, *response)
 }
 
 func (h *UserHandler) removeUserIpWhitelist(w http.ResponseWriter, r *http.Request) {
@@ -420,18 +313,19 @@ func (h *UserHandler) removeUserIpWhitelist(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	arg := repository.DeleteUserIpwhitelistParams{
-		UserID:  id,
-		Column2: req.IpCidr,
-	}
-
-	err = h.queries.DeleteUserIpwhitelist(r.Context(), arg)
+	code, message, err := h.service.RemoveUserIpWhitelist(r.Context(), id, &req)
 	if err != nil {
-		functions.RespondwithError(w, http.StatusInternalServerError, "server error", err)
+		functions.RespondwithError(w, code, message, err)
 		return
 	}
 
-	functions.RespondwithJSON(w, http.StatusOK, nil)
+	res := struct {
+		Message string `json:"message"`
+	}{
+		Message: message,
+	}
+
+	functions.RespondwithJSON(w, http.StatusOK, res)
 }
 
 func (h *UserHandler) GenerateproxyString(w http.ResponseWriter, r *http.Request) {
@@ -470,39 +364,11 @@ func (h *UserHandler) GenerateproxyString(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	tag := *req.PoolGroup + *req.ProxyType + "%"
-
-	data, err := h.queries.GenerateproxyString(r.Context(), repository.GenerateproxyStringParams{
-		Code:   *req.CountryCode,
-		Tag:    tag,
-		UserID: *req.UserId,
-	})
+	response, code, message, err := h.service.GenerateProxyString(r.Context(), &req)
 	if err != nil {
-		functions.RespondwithError(w, http.StatusInternalServerError, "server error", err)
+		functions.RespondwithError(w, code, message, err)
 		return
 	}
 
-	userName := data.Username
-	password := data.Password
-	subdomain := data.Subdomain
-	port := data.Port
-
-	res := []string{}
-
-	for i := 0; i < *req.Amount; i++ {
-		config := functions.GenerateproxyString(*req.PoolGroup, *req.CountryCode, *req.IsSticky)
-		switch *req.Format {
-		case "ip:port:user:pass":
-			proxyString := fmt.Sprintf("%s"+"upstream-y.com"+":%d:%s:%s%s", subdomain, port, userName, password, config)
-			res = append(res, proxyString)
-		case "user:pass:ip:port":
-			proxyString := fmt.Sprintf("%s:%s%s:%s"+"upstream-y.com"+":%d", userName, password, config, subdomain, port)
-			res = append(res, proxyString)
-		case "user:pass@ip:port":
-			proxyString := fmt.Sprintf("%s:%s%s@%s"+"upstream-y.com"+":%d", userName, password, config, subdomain, port)
-			res = append(res, proxyString)
-		}
-	}
-
-	functions.RespondwithJSON(w, http.StatusOK, res)
+	functions.RespondwithJSON(w, http.StatusOK, response)
 }
