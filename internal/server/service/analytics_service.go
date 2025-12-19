@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
@@ -16,14 +17,21 @@ type AnalyticsService interface {
 	GetUserUsage(ctx context.Context, userID string, from, to time.Time, granularity string) (interface{}, error)
 	GetWorkerHealth(ctx context.Context, workerID string, from, to time.Time) ([]WorkerHealth, error)
 	GetUserWebsiteAccess(ctx context.Context, userID string, from, to time.Time) ([]WebsiteAccess, error)
+	StartWorkers()
 }
 
 type analyticsService struct {
-	conn driver.Conn
+	conn              driver.Conn
+	userDataChan      chan UserDataUsage
+	websiteAccessChan chan WebsiteAccess
 }
 
 func NewAnalyticsService(conn driver.Conn) AnalyticsService {
-	return &analyticsService{conn: conn}
+	return &analyticsService{
+		conn:              conn,
+		userDataChan:      make(chan UserDataUsage, 10000),
+		websiteAccessChan: make(chan WebsiteAccess, 10000),
+	}
 }
 
 type UserDataUsage struct {
@@ -72,20 +80,13 @@ func (s *analyticsService) RecordUserDataUsage(ctx context.Context, data UserDat
 		data.SourceIP = "0.0.0.0"
 	}
 
-	query := `
-		INSERT INTO analytics.user_data_usage (
-			user_id, username, pool_id, pool_name, worker_id, worker_region,
-			bytes_sent, bytes_received, session_id, source_ip, user_agent,
-			protocol, destination_host, destination_port, status_code
-		) VALUES (
-			?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
-		)
-	`
-	return s.conn.Exec(ctx, query,
-		data.UserID, data.Username, data.PoolID, data.PoolName, data.WorkerID, data.WorkerRegion,
-		data.BytesSent, data.BytesReceived, data.SessionID, data.SourceIP, data.UserAgent,
-		data.Protocol, data.DestinationHost, data.DestinationPort, data.StatusCode,
-	)
+	select {
+	case s.userDataChan <- data:
+		return nil
+	default:
+		// Drop event if buffer is full
+		return fmt.Errorf("analytics buffer full, dropping user data event")
+	}
 }
 
 func (s *analyticsService) RecordWorkerHealth(ctx context.Context, data WorkerHealth) error {
@@ -155,20 +156,12 @@ func (s *analyticsService) RecordWebsiteAccess(ctx context.Context, data Website
 		data.SourceIP = "0.0.0.0"
 	}
 
-	query := `
-		INSERT INTO analytics.website_access (
-			user_id, username, domain, subdomain, full_url,
-			bytes_sent, bytes_received, request_method, status_code,
-			content_type, user_agent, session_id, source_ip
-		) VALUES (
-			?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
-		)
-	`
-	return s.conn.Exec(ctx, query,
-		data.UserID, data.Username, data.Domain, data.Subdomain, data.FullURL,
-		data.BytesSent, data.BytesReceived, data.RequestMethod, data.StatusCode,
-		data.ContentType, data.UserAgent, data.SessionID, data.SourceIP,
-	)
+	select {
+	case s.websiteAccessChan <- data:
+		return nil
+	default:
+		return fmt.Errorf("analytics buffer full, dropping website access event")
+	}
 }
 
 type UserUsageHourly struct {
@@ -240,4 +233,133 @@ func (s *analyticsService) GetUserWebsiteAccess(ctx context.Context, userID stri
 		return nil, err
 	}
 	return results, nil
+}
+
+func (s *analyticsService) StartWorkers() {
+	go s.processUserDataBatch()
+	go s.processWebsiteAccessBatch()
+}
+
+func (s *analyticsService) processUserDataBatch() {
+	batchSize := 1000
+	flushInterval := 5 * time.Second
+
+	batch := make([]UserDataUsage, 0, batchSize)
+	ticker := time.NewTicker(flushInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case item := <-s.userDataChan:
+			batch = append(batch, item)
+			if len(batch) >= batchSize {
+				s.flushUserData(batch)
+				batch = batch[:0]
+			}
+		case <-ticker.C:
+			if len(batch) > 0 {
+				s.flushUserData(batch)
+				batch = batch[:0]
+			}
+		}
+	}
+}
+
+func (s *analyticsService) flushUserData(items []UserDataUsage) {
+	if len(items) == 0 {
+		return
+	}
+
+	ctx := context.Background()
+	query := `INSERT INTO analytics.user_data_usage (
+			user_id, username, pool_id, pool_name, worker_id, worker_region,
+			bytes_sent, bytes_received, session_id, source_ip, user_agent,
+			protocol, destination_host, destination_port, status_code
+		) VALUES (
+			?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+		)`
+
+	batch, err := s.conn.PrepareBatch(ctx, query)
+	if err != nil {
+		log.Printf("Failed to prepare user data batch: %v", err)
+		return
+	}
+
+	for _, data := range items {
+		err := batch.Append(
+			data.UserID, data.Username, data.PoolID, data.PoolName, data.WorkerID, data.WorkerRegion,
+			data.BytesSent, data.BytesReceived, data.SessionID, data.SourceIP, data.UserAgent,
+			data.Protocol, data.DestinationHost, data.DestinationPort, data.StatusCode,
+		)
+		if err != nil {
+			log.Printf("Failed to append user data to batch: %v", err)
+			continue
+		}
+	}
+
+	if err := batch.Send(); err != nil {
+		log.Printf("Failed to send user data batch: %v", err)
+	}
+}
+
+func (s *analyticsService) processWebsiteAccessBatch() {
+	batchSize := 1000
+	flushInterval := 5 * time.Second
+
+	batch := make([]WebsiteAccess, 0, batchSize)
+	ticker := time.NewTicker(flushInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case item := <-s.websiteAccessChan:
+			batch = append(batch, item)
+			if len(batch) >= batchSize {
+				s.flushWebsiteAccess(batch)
+				batch = batch[:0]
+			}
+		case <-ticker.C:
+			if len(batch) > 0 {
+				s.flushWebsiteAccess(batch)
+				batch = batch[:0]
+			}
+		}
+	}
+}
+
+func (s *analyticsService) flushWebsiteAccess(items []WebsiteAccess) {
+	if len(items) == 0 {
+		return
+	}
+
+	ctx := context.Background()
+	query := `INSERT INTO analytics.website_access (
+			user_id, username, domain, subdomain, full_url,
+			bytes_sent, bytes_received, request_method, status_code,
+			content_type, user_agent, session_id, source_ip
+		) VALUES (
+			?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+		)`
+
+	batch, err := s.conn.PrepareBatch(ctx, query)
+	if err != nil {
+		log.Printf("Failed to prepare website access batch: %v", err)
+		return
+	}
+
+	for _, data := range items {
+		err := batch.Append(
+			data.UserID, data.Username, data.Domain, data.Subdomain, data.FullURL,
+			data.BytesSent, data.BytesReceived, data.RequestMethod, data.StatusCode,
+			data.ContentType, data.UserAgent, data.SessionID, data.SourceIP,
+		)
+		if err != nil {
+			log.Printf("Failed to append website access to batch: %v", err)
+			continue
+		}
+	}
+
+	if err := batch.Send(); err != nil {
+		log.Printf("Failed to send website access batch: %v", err)
+	}
 }

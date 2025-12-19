@@ -35,6 +35,7 @@ func NewRouter(pool *sql.DB, clickHouseConn driver.Conn) http.Handler {
 	q := repository.New(pool)
 	u := handlers.NewUserHandler(q, pool, service.NewUserService(q, pool))
 	analyticsService := service.NewAnalyticsService(clickHouseConn)
+	analyticsService.StartWorkers()
 	w := handlers.NewWorkerHandler(q, pool, analyticsService)
 	p := handlers.NewPoolHandler(q, pool)
 

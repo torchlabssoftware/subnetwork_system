@@ -24,7 +24,9 @@ func ConnectClickHouse(url string) (driver.Conn, error) {
 		Compression: &clickhouse.Compression{
 			Method: clickhouse.CompressionLZ4,
 		},
-		DialTimeout: time.Second * 30,
+		DialTimeout:  time.Second * 5,
+		MaxOpenConns: 10,
+		MaxIdleConns: 5,
 	})
 
 	if err != nil {
