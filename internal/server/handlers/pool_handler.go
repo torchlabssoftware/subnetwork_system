@@ -93,7 +93,12 @@ func (p *PoolHandler) DeleteRegion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	code, message, err := p.Service.DeleteRegion(r.Context(), req.Name)
+	if req.Name == nil || *req.Name == "" {
+		functions.RespondwithError(w, http.StatusBadRequest, "add region name", fmt.Errorf("no region name"))
+		return
+	}
+
+	code, message, err := p.Service.DeleteRegion(r.Context(), *req.Name)
 	if err != nil {
 		functions.RespondwithError(w, code, message, err)
 		return
@@ -109,28 +114,13 @@ func (p *PoolHandler) DeleteRegion(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *PoolHandler) getcountries(w http.ResponseWriter, r *http.Request) {
-
-	countries, err := p.Queries.GetCountries(r.Context())
+	countries, status, message, err := p.Service.GetCountries(r.Context())
 	if err != nil {
-		functions.RespondwithError(w, http.StatusBadRequest, "server error", err)
+		functions.RespondwithError(w, status, message, err)
 		return
 	}
 
-	res := []models.GetCountryResponce{}
-
-	for _, country := range countries {
-		r := models.GetCountryResponce{
-			Id:        country.ID,
-			Name:      country.Name,
-			Code:      country.Code,
-			RegionId:  country.RegionID,
-			CreatedAt: country.CreatedAt,
-		}
-
-		res = append(res, r)
-	}
-
-	functions.RespondwithJSON(w, http.StatusCreated, res)
+	functions.RespondwithJSON(w, http.StatusOK, countries)
 }
 
 func (p *PoolHandler) createCountry(w http.ResponseWriter, r *http.Request) {
@@ -140,29 +130,15 @@ func (p *PoolHandler) createCountry(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if (req.Name == nil && *req.Name == "") || (req.Code == nil && *req.Code == "") || req.RegionId == nil {
+	if (req.Name == nil || *req.Name == "") || (req.Code == nil || *req.Code == "") || req.RegionId == nil {
 		functions.RespondwithError(w, http.StatusBadRequest, "err in request body", fmt.Errorf("err in request body"))
 		return
 	}
 
-	args := repository.AddCountryParams{
-		Name:     *req.Name,
-		Code:     *req.Code,
-		RegionID: *req.RegionId,
-	}
-
-	country, err := p.Queries.AddCountry(r.Context(), args)
+	res, status, message, err := p.Service.CreateCountry(r.Context(), req)
 	if err != nil {
-		functions.RespondwithError(w, http.StatusBadRequest, "server error", err)
+		functions.RespondwithError(w, status, message, err)
 		return
-	}
-
-	res := models.CreateCountryResponce{
-		Id:        country.ID,
-		Name:      country.Name,
-		Code:      country.Code,
-		RegionId:  country.RegionID,
-		CreatedAt: country.CreatedAt,
 	}
 
 	functions.RespondwithJSON(w, http.StatusCreated, res)
@@ -175,9 +151,14 @@ func (p *PoolHandler) DeleteCountry(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := p.Queries.DeleteCountry(r.Context(), req.Name)
+	if req.Name == nil || *req.Name == "" {
+		functions.RespondwithError(w, http.StatusBadRequest, "add country name", fmt.Errorf("no region name"))
+		return
+	}
+
+	code, message, err := p.Service.DeleteCountry(r.Context(), *req.Name)
 	if err != nil {
-		functions.RespondwithError(w, http.StatusBadRequest, "server error", err)
+		functions.RespondwithError(w, code, message, err)
 		return
 	}
 

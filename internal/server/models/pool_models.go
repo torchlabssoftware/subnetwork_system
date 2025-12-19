@@ -23,7 +23,7 @@ type CreateRegionResponce struct {
 }
 
 type DeleteRegionRequest struct {
-	Name string `json:"name"`
+	Name *string `json:"name"`
 }
 
 type GetCountryResponce struct {
@@ -49,7 +49,7 @@ type CreateCountryResponce struct {
 }
 
 type DeleteCountryRequest struct {
-	Name string `json:"name"`
+	Name *string `json:"name"`
 }
 
 type GetUpstreamResponce struct {
