@@ -283,3 +283,12 @@ func (q *Queries) GetWorkerPoolConfig(ctx context.Context, id uuid.UUID) ([]GetW
 	}
 	return items, nil
 }
+
+const updateWorkerLastSeen = `-- name: UpdateWorkerLastSeen :exec
+UPDATE worker SET last_seen = NOW() WHERE id = $1
+`
+
+func (q *Queries) UpdateWorkerLastSeen(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, updateWorkerLastSeen, id)
+	return err
+}

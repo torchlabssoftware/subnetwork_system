@@ -51,6 +51,7 @@ type Querier interface {
 	ListPoolsWithUpstreams(ctx context.Context) ([]ListPoolsWithUpstreamsRow, error)
 	UpdatePool(ctx context.Context, arg UpdatePoolParams) (Pool, error)
 	UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error)
+	UpdateWorkerLastSeen(ctx context.Context, id uuid.UUID) error
 }
 
 var _ Querier = (*Queries)(nil)

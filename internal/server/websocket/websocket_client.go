@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"time"
@@ -115,6 +116,9 @@ func (w *Worker) WriteMessage() {
 }
 
 func (w *Worker) PongHandler(pongMsg string) error {
-	log.Println("pong")
+	log.Println("pong from", w.Name)
+	if err := w.Manager.queries.UpdateWorkerLastSeen(context.Background(), w.ID); err != nil {
+		log.Printf("Failed to update last seen for worker %s: %v", w.Name, err)
+	}
 	return w.Connection.SetReadDeadline(time.Now().Add(pongWait))
 }

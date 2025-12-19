@@ -73,3 +73,6 @@ JOIN pool p ON w.pool_id = p.id
 JOIN pool_upstream_weight puw ON p.id = puw.pool_id
 JOIN upstream u ON puw.upstream_id = u.id
 WHERE w.id = $1;
+
+-- name: UpdateWorkerLastSeen :exec
+UPDATE worker SET last_seen = NOW() WHERE id = $1;
