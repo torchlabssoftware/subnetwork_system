@@ -41,17 +41,26 @@ type UserDataUsage struct {
 	StatusCode      uint16    `json:"status_code"`
 }
 
+type UpstreamHealth struct {
+	UpstreamID  uuid.UUID `json:"upstream_id"`
+	UpstreamTag string    `json:"upstream_tag"`
+	Status      string    `json:"status"`
+	Latency     int64     `json:"latency"`
+	ErrorRate   float32   `json:"error_rate"`
+}
+
 type WorkerHealth struct {
-	WorkerID              uuid.UUID `json:"worker_id"`
-	WorkerName            string    `json:"worker_name"`
-	Region                string    `json:"region"`
-	Status                string    `json:"status"`
-	CpuUsage              float32   `json:"cpu_usage"`
-	MemoryUsage           float32   `json:"memory_usage"`
-	ActiveConnections     uint32    `json:"active_connections"`
-	TotalConnections      uint64    `json:"total_connections"`
-	BytesThroughputPerSec uint64    `json:"bytes_throughput_per_sec"`
-	ErrorRate             float32   `json:"error_rate"`
+	WorkerID              uuid.UUID        `json:"worker_id"`
+	WorkerName            string           `json:"worker_name"`
+	Region                string           `json:"region"`
+	Status                string           `json:"status"`
+	CpuUsage              float32          `json:"cpu_usage"`
+	MemoryUsage           float32          `json:"memory_usage"`
+	ActiveConnections     uint32           `json:"active_connections"`
+	TotalConnections      uint64           `json:"total_connections"`
+	BytesThroughputPerSec uint64           `json:"bytes_throughput_per_sec"`
+	ErrorRate             float32          `json:"error_rate"`
+	Upstreams             []UpstreamHealth `json:"upstreams"`
 }
 
 func (s *analyticsService) RecordUserDataUsage(ctx context.Context, data UserDataUsage) error {
@@ -77,7 +86,8 @@ func (s *analyticsService) RecordUserDataUsage(ctx context.Context, data UserDat
 }
 
 func (s *analyticsService) RecordWorkerHealth(ctx context.Context, data WorkerHealth) error {
-	query := `
+	// 1. Record Worker App Health
+	queryWorker := `
 		INSERT INTO analytics.worker_health (
 			worker_id, worker_name, region, status, cpu_usage, memory_usage,
 			active_connections, total_connections, bytes_throughput_per_sec, error_rate
@@ -85,10 +95,39 @@ func (s *analyticsService) RecordWorkerHealth(ctx context.Context, data WorkerHe
 			?, ?, ?, ?, ?, ?, ?, ?, ?, ?
 		)
 	`
-	return s.conn.Exec(ctx, query,
+	if err := s.conn.Exec(ctx, queryWorker,
 		data.WorkerID, data.WorkerName, data.Region, data.Status, data.CpuUsage, data.MemoryUsage,
 		data.ActiveConnections, data.TotalConnections, data.BytesThroughputPerSec, data.ErrorRate,
-	)
+	); err != nil {
+		return fmt.Errorf("failed to insert worker health: %w", err)
+	}
+
+	// 2. Record Upstream Health
+	if len(data.Upstreams) > 0 {
+		batch, err := s.conn.PrepareBatch(ctx, "INSERT INTO analytics.worker_upstream_health (worker_id, upstream_id, upstream_tag, status, latency, error_rate)")
+		if err != nil {
+			return fmt.Errorf("failed to prepare batch for upstreams: %w", err)
+		}
+
+		for _, u := range data.Upstreams {
+			if err := batch.Append(
+				data.WorkerID,
+				u.UpstreamID,
+				u.UpstreamTag,
+				u.Status,
+				u.Latency,
+				u.ErrorRate,
+			); err != nil {
+				return fmt.Errorf("failed to append upstream health to batch: %w", err)
+			}
+		}
+
+		if err := batch.Send(); err != nil {
+			return fmt.Errorf("failed to send upstream health batch: %w", err)
+		}
+	}
+
+	return nil
 }
 
 type UserUsageHourly struct {
