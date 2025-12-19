@@ -1,14 +1,12 @@
 package server
 
 import (
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"net/http"
 
 	"github.com/go-chi/chi"
 	"github.com/google/uuid"
-	"github.com/torchlabssoftware/subnetwork_system/internal/db/repository"
 	functions "github.com/torchlabssoftware/subnetwork_system/internal/server/functions"
 	middleware "github.com/torchlabssoftware/subnetwork_system/internal/server/middleware"
 	models "github.com/torchlabssoftware/subnetwork_system/internal/server/models"
@@ -17,14 +15,10 @@ import (
 
 type UserHandler struct {
 	service service.UserService
-	queries *repository.Queries
-	db      *sql.DB
 }
 
-func NewUserHandler(q *repository.Queries, db *sql.DB, service service.UserService) *UserHandler {
+func NewUserHandler(service service.UserService) *UserHandler {
 	return &UserHandler{
-		queries: q,
-		db:      db,
 		service: service,
 	}
 }

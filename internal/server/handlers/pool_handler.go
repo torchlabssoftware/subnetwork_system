@@ -12,17 +12,20 @@ import (
 	functions "github.com/torchlabssoftware/subnetwork_system/internal/server/functions"
 	middleware "github.com/torchlabssoftware/subnetwork_system/internal/server/middleware"
 	models "github.com/torchlabssoftware/subnetwork_system/internal/server/models"
+	"github.com/torchlabssoftware/subnetwork_system/internal/server/service"
 )
 
 type PoolHandler struct {
 	Queries *repository.Queries
 	DB      *sql.DB
+	Service service.PoolService
 }
 
-func NewPoolHandler(queries *repository.Queries, db *sql.DB) *PoolHandler {
+func NewPoolHandler(queries *repository.Queries, db *sql.DB, service service.PoolService) *PoolHandler {
 	return &PoolHandler{
 		Queries: queries,
 		DB:      db,
+		Service: service,
 	}
 }
 
@@ -53,25 +56,13 @@ func (p *PoolHandler) AdminRoutes() http.Handler {
 
 func (p *PoolHandler) getRegions(w http.ResponseWriter, r *http.Request) {
 
-	regions, err := p.Queries.GetRegions(r.Context())
+	regions, status, message, err := p.Service.GetRegions(r.Context())
 	if err != nil {
-		functions.RespondwithError(w, http.StatusBadRequest, "server error", err)
+		functions.RespondwithError(w, status, message, err)
 		return
 	}
 
-	res := []models.GetRegionResponce{}
-
-	for _, region := range regions {
-		r := models.GetRegionResponce{
-			Id:        region.ID,
-			Name:      region.Name,
-			CreatedAt: region.CreatedAt,
-		}
-
-		res = append(res, r)
-	}
-
-	functions.RespondwithJSON(w, http.StatusOK, res)
+	functions.RespondwithJSON(w, http.StatusOK, regions)
 }
 
 func (p *PoolHandler) createRegion(w http.ResponseWriter, r *http.Request) {
@@ -81,21 +72,15 @@ func (p *PoolHandler) createRegion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Name == nil && *req.Name == "" {
+	if req.Name == nil || *req.Name == "" {
 		functions.RespondwithError(w, http.StatusBadRequest, "add Request name", fmt.Errorf("no region name"))
 		return
 	}
 
-	region, err := p.Queries.AddRegion(r.Context(), *req.Name)
+	res, status, message, err := p.Service.CreateRegion(r.Context(), req)
 	if err != nil {
-		functions.RespondwithError(w, http.StatusBadRequest, "server error", err)
+		functions.RespondwithError(w, status, message, err)
 		return
-	}
-
-	res := models.CreateRegionResponce{
-		Id:        region.ID,
-		Name:      region.Name,
-		CreatedAt: region.CreatedAt,
 	}
 
 	functions.RespondwithJSON(w, http.StatusCreated, res)
@@ -108,9 +93,9 @@ func (p *PoolHandler) DeleteRegion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := p.Queries.DeleteRegion(r.Context(), req.Name)
+	code, message, err := p.Service.DeleteRegion(r.Context(), req.Name)
 	if err != nil {
-		functions.RespondwithError(w, http.StatusBadRequest, "server error", err)
+		functions.RespondwithError(w, code, message, err)
 		return
 	}
 
