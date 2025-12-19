@@ -160,13 +160,13 @@ func (q *Queries) DeleteRegion(ctx context.Context, name string) error {
 	return err
 }
 
-const deleteUpstream = `-- name: DeleteUpstream :exec
+const deleteUpstreamByTag = `-- name: DeleteUpstreamByTag :exec
 DELETE FROM upstream as u
-where u.id = $1
+where u.tag = $1
 `
 
-func (q *Queries) DeleteUpstream(ctx context.Context, id uuid.UUID) error {
-	_, err := q.db.ExecContext(ctx, deleteUpstream, id)
+func (q *Queries) DeleteUpstreamByTag(ctx context.Context, tag string) error {
+	_, err := q.db.ExecContext(ctx, deleteUpstreamByTag, tag)
 	return err
 }
 

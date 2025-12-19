@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"database/sql"
 	"net/http"
 
 	"github.com/torchlabssoftware/subnetwork_system/internal/db/repository"
@@ -15,6 +16,9 @@ type PoolService interface {
 	GetCountries(ctx context.Context) ([]models.GetCountryResponce, int, string, error)
 	CreateCountry(ctx context.Context, req models.CreateCountryRequest) (models.CreateCountryResponce, int, string, error)
 	DeleteCountry(ctx context.Context, name string) (int, string, error)
+	GetUpstreams(ctx context.Context) ([]models.GetUpstreamResponce, int, string, error)
+	CreateUpstream(ctx context.Context, req models.CreateUpstreamRequest) (models.CreateUpstreamResponce, int, string, error)
+	DeleteUpstream(ctx context.Context, tag string) (int, string, error)
 }
 
 type PoolServiceImpl struct {
@@ -121,4 +125,67 @@ func (s *PoolServiceImpl) DeleteCountry(ctx context.Context, name string) (int, 
 		return http.StatusInternalServerError, "failed to delete country", err
 	}
 	return http.StatusOK, "country deleted", nil
+}
+
+func (s *PoolServiceImpl) GetUpstreams(ctx context.Context) ([]models.GetUpstreamResponce, int, string, error) {
+	upstreams, err := s.Queries.GetUpstreams(ctx)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, http.StatusNotFound, "upstreams not found", nil
+		}
+		return nil, http.StatusInternalServerError, "failed to get upstreams", err
+	}
+
+	res := []models.GetUpstreamResponce{}
+
+	for _, upstream := range upstreams {
+		r := models.GetUpstreamResponce{
+			Id:               upstream.ID,
+			Tag:              upstream.Tag,
+			UpstreamProvider: upstream.UpstreamProvider,
+			Format:           upstream.Format,
+			Domain:           upstream.Domain,
+			Port:             int(upstream.Port),
+			CreatedAt:        upstream.CreatedAt,
+		}
+
+		res = append(res, r)
+	}
+
+	return res, http.StatusOK, "", nil
+}
+
+func (s *PoolServiceImpl) CreateUpstream(ctx context.Context, req models.CreateUpstreamRequest) (models.CreateUpstreamResponce, int, string, error) {
+
+	args := repository.AddUpstreamParams{
+		Tag:              *req.Tag,
+		UpstreamProvider: *req.UpstreamProvider,
+		Format:           *req.Format,
+		Port:             int32(*req.Port),
+		Domain:           *req.Domain,
+	}
+
+	upstream, err := s.Queries.AddUpstream(ctx, args)
+	if err != nil {
+		return models.CreateUpstreamResponce{}, http.StatusInternalServerError, "failed to create upstream", err
+	}
+
+	res := models.CreateUpstreamResponce{
+		Id:               upstream.ID,
+		Tag:              upstream.Tag,
+		UpstreamProvider: upstream.UpstreamProvider,
+		Format:           upstream.Format,
+		Port:             int(upstream.Port),
+		Domain:           upstream.Domain,
+		CreatedAt:        upstream.CreatedAt,
+	}
+
+	return res, http.StatusCreated, "upstream created", nil
+}
+
+func (s *PoolServiceImpl) DeleteUpstream(ctx context.Context, tag string) (int, string, error) {
+	if err := s.Queries.DeleteUpstreamByTag(ctx, tag); err != nil {
+		return http.StatusInternalServerError, "failed to delete upstream", err
+	}
+	return http.StatusOK, "upstream deleted", nil
 }

@@ -30,9 +30,9 @@ INSERT INTO upstream(tag,upstream_provider,format,port,domain)
 VALUES($1,$2,$3,$4,$5)
 RETURNING *;
 
--- name: DeleteUpstream :exec
+-- name: DeleteUpstreamByTag :exec
 DELETE FROM upstream as u
-where u.id = $1;
+where u.tag = $1;
 
 -- name: InsetPool :one
 INSERT INTO pool(tag,region_id,subdomain,port)

@@ -24,7 +24,7 @@ type Querier interface {
 	DeletePool(ctx context.Context, tag string) error
 	DeletePoolUpstreamWeight(ctx context.Context, arg DeletePoolUpstreamWeightParams) error
 	DeleteRegion(ctx context.Context, name string) error
-	DeleteUpstream(ctx context.Context, id uuid.UUID) error
+	DeleteUpstreamByTag(ctx context.Context, tag string) error
 	DeleteUser(ctx context.Context, id uuid.UUID) error
 	DeleteUserIpwhitelist(ctx context.Context, arg DeleteUserIpwhitelistParams) (sql.Result, error)
 	DeleteUserPoolsByTags(ctx context.Context, arg DeleteUserPoolsByTagsParams) (sql.Result, error)

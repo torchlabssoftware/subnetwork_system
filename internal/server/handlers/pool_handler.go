@@ -172,30 +172,13 @@ func (p *PoolHandler) DeleteCountry(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *PoolHandler) getUpstreams(w http.ResponseWriter, r *http.Request) {
-
-	upstreams, err := p.Queries.GetUpstreams(r.Context())
+	upstreams, status, message, err := p.Service.GetUpstreams(r.Context())
 	if err != nil {
-		functions.RespondwithError(w, http.StatusBadRequest, "server error", err)
+		functions.RespondwithError(w, status, message, err)
 		return
 	}
 
-	res := []models.GetUpstreamResponce{}
-
-	for _, upstream := range upstreams {
-		r := models.GetUpstreamResponce{
-			Id:               upstream.ID,
-			Tag:              upstream.Tag,
-			UpstreamProvider: upstream.UpstreamProvider,
-			Format:           upstream.Format,
-			Domain:           upstream.Domain,
-			Port:             int(upstream.Port),
-			CreatedAt:        upstream.CreatedAt,
-		}
-
-		res = append(res, r)
-	}
-
-	functions.RespondwithJSON(w, http.StatusCreated, res)
+	functions.RespondwithJSON(w, http.StatusOK, upstreams)
 }
 
 func (p *PoolHandler) createUpstream(w http.ResponseWriter, r *http.Request) {
@@ -205,37 +188,19 @@ func (p *PoolHandler) createUpstream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if (req.UpstreamProvider == nil && *req.UpstreamProvider == "") ||
-		(req.Format == nil && *req.Format == "") ||
-		(req.Tag == nil && *req.Tag == "") ||
+	if (req.UpstreamProvider == nil || *req.UpstreamProvider == "") ||
+		(req.Format == nil || *req.Format == "") ||
+		(req.Tag == nil || *req.Tag == "") ||
 		req.Port == nil ||
-		(req.Domain == nil && *req.Domain == "") {
+		(req.Domain == nil || *req.Domain == "") {
 		functions.RespondwithError(w, http.StatusBadRequest, "err in request body", fmt.Errorf("err in request body"))
 		return
 	}
 
-	args := repository.AddUpstreamParams{
-		Tag:              *req.Tag,
-		UpstreamProvider: *req.UpstreamProvider,
-		Format:           *req.Format,
-		Port:             int32(*req.Port),
-		Domain:           *req.Domain,
-	}
-
-	upstream, err := p.Queries.AddUpstream(r.Context(), args)
+	res, status, message, err := p.Service.CreateUpstream(r.Context(), req)
 	if err != nil {
-		functions.RespondwithError(w, http.StatusBadRequest, "server error", err)
+		functions.RespondwithError(w, status, message, err)
 		return
-	}
-
-	res := models.CreateUpstreamResponce{
-		Id:               upstream.ID,
-		Tag:              upstream.Tag,
-		UpstreamProvider: upstream.UpstreamProvider,
-		Format:           upstream.Format,
-		Port:             int(upstream.Port),
-		Domain:           upstream.Domain,
-		CreatedAt:        upstream.CreatedAt,
 	}
 
 	functions.RespondwithJSON(w, http.StatusCreated, res)
@@ -248,9 +213,14 @@ func (p *PoolHandler) deleteUpstream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := p.Queries.DeleteUpstream(r.Context(), req.Id)
+	if req.Tag == nil || *req.Tag == "" {
+		functions.RespondwithError(w, http.StatusBadRequest, "tag is required", fmt.Errorf("tag is required"))
+		return
+	}
+
+	code, message, err := p.Service.DeleteUpstream(r.Context(), *req.Tag)
 	if err != nil {
-		functions.RespondwithError(w, http.StatusBadRequest, "server error", err)
+		functions.RespondwithError(w, code, message, err)
 		return
 	}
 

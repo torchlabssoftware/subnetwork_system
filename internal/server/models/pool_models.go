@@ -81,7 +81,7 @@ type CreateUpstreamResponce struct {
 }
 
 type DeleteUpstreamRequest struct {
-	Id uuid.UUID `json:"id"`
+	Tag *string `json:"tag"`
 }
 
 type CreatePoolRequest struct {
