@@ -3,8 +3,11 @@ package service
 import (
 	"context"
 	"database/sql"
+	"fmt"
+	"log"
 	"net/http"
 
+	"github.com/google/uuid"
 	"github.com/torchlabssoftware/subnetwork_system/internal/db/repository"
 	models "github.com/torchlabssoftware/subnetwork_system/internal/server/models"
 )
@@ -19,15 +22,22 @@ type PoolService interface {
 	GetUpstreams(ctx context.Context) ([]models.GetUpstreamResponce, int, string, error)
 	CreateUpstream(ctx context.Context, req models.CreateUpstreamRequest) (models.CreateUpstreamResponce, int, string, error)
 	DeleteUpstream(ctx context.Context, tag string) (int, string, error)
+	GetPools(ctx context.Context) ([]models.GetPoolsResponse, int, string, error)
+	GetPoolByTag(ctx context.Context, tag string) (*models.GetPoolsResponse, int, string, error)
+	CreatePool(ctx context.Context, req models.CreatePoolRequest) (models.CreatePoolResponce, int, string, error)
+	UpdatePool(ctx context.Context, tag string, req models.UpdatePoolRequest) (models.CreatePoolResponce, int, string, error)
+	DeletePool(ctx context.Context, tag string) (int, string, error)
 }
 
 type PoolServiceImpl struct {
 	Queries *repository.Queries
+	DB      *sql.DB
 }
 
-func NewPoolService(queries *repository.Queries) PoolService {
+func NewPoolService(queries *repository.Queries, db *sql.DB) PoolService {
 	return &PoolServiceImpl{
 		Queries: queries,
+		DB:      db,
 	}
 }
 
@@ -188,4 +198,213 @@ func (s *PoolServiceImpl) DeleteUpstream(ctx context.Context, tag string) (int, 
 		return http.StatusInternalServerError, "failed to delete upstream", err
 	}
 	return http.StatusOK, "upstream deleted", nil
+}
+
+func (s *PoolServiceImpl) GetPools(ctx context.Context) ([]models.GetPoolsResponse, int, string, error) {
+	rows, err := s.Queries.ListPoolsWithUpstreams(ctx)
+	if err != nil {
+		return nil, http.StatusInternalServerError, "Failed to fetch pools", err
+	}
+
+	if len(rows) <= 0 {
+		return nil, http.StatusNotFound, "pools not found", nil
+	}
+
+	poolMap := make(map[uuid.UUID]*models.GetPoolsResponse)
+
+	var orderedPools []*models.GetPoolsResponse
+
+	for _, row := range rows {
+		pool, exists := poolMap[row.PoolID]
+		if !exists {
+			pool = &models.GetPoolsResponse{
+				Id:        row.PoolID,
+				Tag:       row.PoolTag,
+				Subdomain: row.PoolSubdomain,
+				Port:      row.PoolPort,
+				Upstreams: []models.PoolUpstream{},
+			}
+			poolMap[row.PoolID] = pool
+			orderedPools = append(orderedPools, pool)
+		}
+
+		if row.UpstreamTag.Valid {
+			pool.Upstreams = append(pool.Upstreams, models.PoolUpstream{
+				Tag:    row.UpstreamTag.String,
+				Format: row.UpstreamFormat.String,
+				Port:   row.UpstreamPort.Int32,
+				Domain: row.UpstreamDomain.String,
+			})
+		}
+	}
+
+	response := make([]models.GetPoolsResponse, 0, len(orderedPools))
+	for _, pool := range orderedPools {
+		response = append(response, *pool)
+	}
+
+	return response, http.StatusOK, "", nil
+}
+
+func (s *PoolServiceImpl) GetPoolByTag(ctx context.Context, tag string) (*models.GetPoolsResponse, int, string, error) {
+	rows, err := s.Queries.GetPoolByTagWithUpstreams(ctx, tag)
+	if err != nil {
+		return nil, http.StatusInternalServerError, "Failed to fetch pool", err
+	}
+
+	if len(rows) == 0 {
+		return nil, http.StatusNotFound, "Pool not found", fmt.Errorf("pool not found")
+	}
+
+	var poolResponse *models.GetPoolsResponse
+
+	for _, row := range rows {
+		if poolResponse == nil {
+			poolResponse = &models.GetPoolsResponse{
+				Id:        row.PoolID,
+				Tag:       row.PoolTag,
+				Subdomain: row.PoolSubdomain,
+				Port:      row.PoolPort,
+				Upstreams: []models.PoolUpstream{},
+			}
+		}
+
+		if row.UpstreamTag.Valid {
+			poolResponse.Upstreams = append(poolResponse.Upstreams, models.PoolUpstream{
+				Tag:    row.UpstreamTag.String,
+				Format: row.UpstreamFormat.String,
+				Port:   row.UpstreamPort.Int32,
+				Domain: row.UpstreamDomain.String,
+			})
+		}
+	}
+
+	return poolResponse, http.StatusOK, "", nil
+}
+
+func (s *PoolServiceImpl) CreatePool(ctx context.Context, req models.CreatePoolRequest) (models.CreatePoolResponce, int, string, error) {
+	//begin transaction
+	tx, err := s.DB.Begin()
+	if err != nil {
+		return models.CreatePoolResponce{}, http.StatusInternalServerError, "failed to create user", err
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
+	qtx := s.Queries.WithTx(tx)
+
+	args := repository.InsetPoolParams{
+		Tag:       *req.Tag,
+		RegionID:  *req.RegionId,
+		Subdomain: *req.Subdomain,
+		Port:      *req.Port,
+	}
+
+	pool, err := qtx.InsetPool(ctx, args)
+	if err != nil {
+		return models.CreatePoolResponce{}, http.StatusBadRequest, "server error", err
+	}
+
+	weights := []int32{}
+	upstreamTags := []string{}
+
+	for _, upstreams := range *req.UpStreams {
+		weights = append(weights, *upstreams.Weight)
+		upstreamTags = append(upstreamTags, *upstreams.UpstreamTag)
+	}
+
+	weightArgs := repository.InsertPoolUpstreamWeightParams{
+		PoolID:  pool.ID,
+		Column2: weights,
+		Column3: upstreamTags,
+	}
+
+	poolUpstreamWeights, err := qtx.InsertPoolUpstreamWeight(ctx, weightArgs)
+	if err != nil {
+		return models.CreatePoolResponce{}, http.StatusBadRequest, "server error", err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return models.CreatePoolResponce{}, http.StatusInternalServerError, "failed to create pool", err
+	}
+
+	upstreamsRes := []models.CreateUpstreamWeightResponce{}
+
+	for i, puw := range poolUpstreamWeights {
+		upstreamRes := models.CreateUpstreamWeightResponce{
+			UpstreamTag: upstreamTags[i],
+			Weight:      puw.Weight,
+		}
+		upstreamsRes = append(upstreamsRes, upstreamRes)
+	}
+	res := models.CreatePoolResponce{
+		Id:        pool.ID,
+		Tag:       pool.Tag,
+		RegionId:  pool.RegionID,
+		Subdomain: pool.Subdomain,
+		Port:      pool.Port,
+		UpStreams: upstreamsRes,
+		CreatedAt: pool.CreatedAt,
+		UpdatedAt: pool.UpdatedAt,
+	}
+
+	return res, http.StatusCreated, "pool created", nil
+}
+
+func (s *PoolServiceImpl) UpdatePool(ctx context.Context, tag string, req models.UpdatePoolRequest) (models.CreatePoolResponce, int, string, error) {
+	regionId := uuid.NullUUID{Valid: false}
+	if req.RegionId != nil {
+		regionId = uuid.NullUUID{UUID: *req.RegionId, Valid: true}
+	}
+
+	subdomain := sql.NullString{Valid: false}
+	if req.Subdomain != nil {
+		subdomain = sql.NullString{String: *req.Subdomain, Valid: true}
+	}
+
+	port := sql.NullInt32{Valid: false}
+	if req.Port != nil {
+		port = sql.NullInt32{Int32: *req.Port, Valid: true}
+	}
+
+	args := repository.UpdatePoolParams{
+		Tag:       tag,
+		RegionID:  regionId,
+		Subdomain: subdomain,
+		Port:      port,
+	}
+
+	updatedPool, err := s.Queries.UpdatePool(ctx, args)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return models.CreatePoolResponce{}, http.StatusNotFound, "Pool not found", err
+		}
+		return models.CreatePoolResponce{}, http.StatusInternalServerError, "Failed to update pool", err
+	}
+
+	res := models.CreatePoolResponce{
+		Id:        updatedPool.ID,
+		Tag:       updatedPool.Tag,
+		RegionId:  updatedPool.RegionID,
+		Subdomain: updatedPool.Subdomain,
+		Port:      updatedPool.Port,
+		CreatedAt: updatedPool.CreatedAt,
+		UpdatedAt: updatedPool.UpdatedAt,
+	}
+
+	return res, http.StatusOK, "pool updated", nil
+}
+
+func (s *PoolServiceImpl) DeletePool(ctx context.Context, tag string) (int, string, error) {
+	result, err := s.Queries.DeletePool(ctx, tag)
+	if err != nil {
+		return http.StatusInternalServerError, "Failed to delete pool", err
+	}
+	rowsAffected, _ := result.RowsAffected()
+	log.Println(rowsAffected)
+	if rowsAffected == 0 {
+		return http.StatusNotFound, "Nothing deleted", nil
+	}
+	return http.StatusOK, "deleted", nil
 }

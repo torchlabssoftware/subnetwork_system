@@ -84,7 +84,7 @@ SET
 WHERE tag = $1
 RETURNING *;
 
--- name: DeletePool :exec
+-- name: DeletePool :execresult
 DELETE FROM pool
 WHERE tag = $1;
 

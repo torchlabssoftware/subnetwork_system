@@ -7,7 +7,6 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi"
-	"github.com/google/uuid"
 	"github.com/torchlabssoftware/subnetwork_system/internal/db/repository"
 	functions "github.com/torchlabssoftware/subnetwork_system/internal/server/functions"
 	middleware "github.com/torchlabssoftware/subnetwork_system/internal/server/middleware"
@@ -235,80 +234,37 @@ func (p *PoolHandler) deleteUpstream(w http.ResponseWriter, r *http.Request) {
 
 func (p *PoolHandler) createPool(w http.ResponseWriter, r *http.Request) {
 
-	//begin transaction
-	ctx, err := p.DB.Begin()
-	if err != nil {
-		functions.RespondwithError(w, http.StatusInternalServerError, "failed to create user", err)
-		return
-	}
-	defer func() {
-		_ = ctx.Rollback()
-	}()
-
-	qtx := p.Queries.WithTx(ctx)
-
 	var req models.CreatePoolRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		functions.RespondwithError(w, http.StatusBadRequest, "err in request body", err)
 		return
 	}
 
-	args := repository.InsetPoolParams{
-		Tag:       *req.Tag,
-		RegionID:  *req.RegionId,
-		Subdomain: *req.Subdomain,
-		Port:      *req.Port,
+	if req.Tag == nil || *req.Tag == "" {
+		functions.RespondwithError(w, http.StatusBadRequest, "tag is required", fmt.Errorf("tag is required"))
+		return
+	}
+	if req.RegionId == nil {
+		functions.RespondwithError(w, http.StatusBadRequest, "region id is required", fmt.Errorf("region id is required"))
+		return
 	}
 
-	pool, err := qtx.InsetPool(r.Context(), args)
+	if req.Subdomain == nil || *req.Subdomain == "" {
+		functions.RespondwithError(w, http.StatusBadRequest, "subdomain is required", fmt.Errorf("subdomain is required"))
+		return
+	}
+	if req.Port == nil {
+		functions.RespondwithError(w, http.StatusBadRequest, "port is required", fmt.Errorf("port is required"))
+		return
+	}
+	if req.UpStreams == nil {
+		req.UpStreams = &[]models.CreateUpstreamWeightRequest{}
+	}
+
+	res, status, message, err := p.Service.CreatePool(r.Context(), req)
 	if err != nil {
-		functions.RespondwithError(w, http.StatusBadRequest, "server error", err)
+		functions.RespondwithError(w, status, message, err)
 		return
-	}
-
-	weights := []int32{}
-	upstreamTags := []string{}
-
-	for _, upstreams := range *req.UpStreams {
-		weights = append(weights, *upstreams.Weight)
-		upstreamTags = append(upstreamTags, *upstreams.UpstreamTag)
-	}
-
-	weightArgs := repository.InsertPoolUpstreamWeightParams{
-		PoolID:  pool.ID,
-		Column2: weights,
-		Column3: upstreamTags,
-	}
-
-	poolUpstreamWeights, err := qtx.InsertPoolUpstreamWeight(r.Context(), weightArgs)
-	if err != nil {
-		functions.RespondwithError(w, http.StatusBadRequest, "server error", err)
-		return
-	}
-
-	if err := ctx.Commit(); err != nil {
-		functions.RespondwithError(w, http.StatusInternalServerError, "failed to create pool", err)
-		return
-	}
-
-	upstreamsRes := []models.CreateUpstreamWeightResponce{}
-
-	for i, puw := range poolUpstreamWeights {
-		upstreamRes := models.CreateUpstreamWeightResponce{
-			UpstreamTag: upstreamTags[i],
-			Weight:      puw.Weight,
-		}
-		upstreamsRes = append(upstreamsRes, upstreamRes)
-	}
-	res := models.CreatePoolResponce{
-		Id:        pool.ID,
-		Tag:       &pool.Tag,
-		RegionId:  &pool.RegionID,
-		Subdomain: &pool.Subdomain,
-		Port:      &pool.Port,
-		UpStreams: &upstreamsRes,
-		CreatedAt: pool.CreatedAt,
-		UpdatedAt: pool.UpdatedAt,
 	}
 
 	functions.RespondwithJSON(w, http.StatusCreated, res)
@@ -316,45 +272,10 @@ func (p *PoolHandler) createPool(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *PoolHandler) getPools(w http.ResponseWriter, r *http.Request) {
-	rows, err := p.Queries.ListPoolsWithUpstreams(r.Context())
+	response, status, message, err := p.Service.GetPools(r.Context())
 	if err != nil {
-		functions.RespondwithError(w, http.StatusInternalServerError, "Failed to fetch pools", err)
+		functions.RespondwithError(w, status, message, err)
 		return
-	}
-
-	poolMap := make(map[uuid.UUID]*models.GetPoolsResponse)
-
-	// Preserve order
-	var orderedPools []*models.GetPoolsResponse
-
-	for _, row := range rows {
-		pool, exists := poolMap[row.PoolID]
-		if !exists {
-			pool = &models.GetPoolsResponse{
-				Id:        row.PoolID,
-				Tag:       row.PoolTag,
-				Subdomain: row.PoolSubdomain,
-				Port:      row.PoolPort,
-				Upstreams: []models.PoolUpstream{},
-			}
-			poolMap[row.PoolID] = pool
-			orderedPools = append(orderedPools, pool)
-		}
-
-		if row.UpstreamTag.Valid {
-			pool.Upstreams = append(pool.Upstreams, models.PoolUpstream{
-				Tag:    row.UpstreamTag.String,
-				Format: row.UpstreamFormat.String,
-				Port:   row.UpstreamPort.Int32,
-				Domain: row.UpstreamDomain.String,
-			})
-		}
-	}
-
-	// Create final response from ordered list
-	response := make([]models.GetPoolsResponse, 0, len(orderedPools))
-	for _, pool := range orderedPools {
-		response = append(response, *pool)
 	}
 
 	functions.RespondwithJSON(w, http.StatusOK, response)
@@ -367,38 +288,10 @@ func (p *PoolHandler) getPoolByTag(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rows, err := p.Queries.GetPoolByTagWithUpstreams(r.Context(), tag)
+	poolResponse, status, message, err := p.Service.GetPoolByTag(r.Context(), tag)
 	if err != nil {
-		functions.RespondwithError(w, http.StatusInternalServerError, "Failed to fetch pool", err)
+		functions.RespondwithError(w, status, message, err)
 		return
-	}
-
-	if len(rows) == 0 {
-		functions.RespondwithError(w, http.StatusNotFound, "Pool not found", fmt.Errorf("pool not found"))
-		return
-	}
-
-	var poolResponse *models.GetPoolsResponse
-
-	for _, row := range rows {
-		if poolResponse == nil {
-			poolResponse = &models.GetPoolsResponse{
-				Id:        row.PoolID,
-				Tag:       row.PoolTag,
-				Subdomain: row.PoolSubdomain,
-				Port:      row.PoolPort,
-				Upstreams: []models.PoolUpstream{},
-			}
-		}
-
-		if row.UpstreamTag.Valid {
-			poolResponse.Upstreams = append(poolResponse.Upstreams, models.PoolUpstream{
-				Tag:    row.UpstreamTag.String,
-				Format: row.UpstreamFormat.String,
-				Port:   row.UpstreamPort.Int32,
-				Domain: row.UpstreamDomain.String,
-			})
-		}
 	}
 
 	functions.RespondwithJSON(w, http.StatusOK, poolResponse)
@@ -417,46 +310,10 @@ func (p *PoolHandler) updatePool(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	regionId := uuid.NullUUID{Valid: false}
-	if req.RegionId != nil {
-		regionId = uuid.NullUUID{UUID: *req.RegionId, Valid: true}
-	}
-
-	subdomain := sql.NullString{Valid: false}
-	if req.Subdomain != nil {
-		subdomain = sql.NullString{String: *req.Subdomain, Valid: true}
-	}
-
-	port := sql.NullInt32{Valid: false}
-	if req.Port != nil {
-		port = sql.NullInt32{Int32: *req.Port, Valid: true}
-	}
-
-	args := repository.UpdatePoolParams{
-		Tag:       tagStr,
-		RegionID:  regionId,
-		Subdomain: subdomain,
-		Port:      port,
-	}
-
-	updatedPool, err := p.Queries.UpdatePool(r.Context(), args)
+	res, status, message, err := p.Service.UpdatePool(r.Context(), tagStr, req)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			functions.RespondwithError(w, http.StatusNotFound, "Pool not found", err)
-			return
-		}
-		functions.RespondwithError(w, http.StatusInternalServerError, "Failed to update pool", err)
+		functions.RespondwithError(w, status, message, err)
 		return
-	}
-
-	res := models.CreatePoolResponce{
-		Id:        updatedPool.ID,
-		Tag:       &updatedPool.Tag,
-		RegionId:  &updatedPool.RegionID,
-		Subdomain: &updatedPool.Subdomain,
-		Port:      &updatedPool.Port,
-		CreatedAt: updatedPool.CreatedAt,
-		UpdatedAt: updatedPool.UpdatedAt,
 	}
 
 	functions.RespondwithJSON(w, http.StatusOK, res)
@@ -469,16 +326,16 @@ func (p *PoolHandler) deletePool(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := p.Queries.DeletePool(r.Context(), tag)
+	code, message, err := p.Service.DeletePool(r.Context(), tag)
 	if err != nil {
-		functions.RespondwithError(w, http.StatusInternalServerError, "Failed to delete pool", err)
+		functions.RespondwithError(w, code, message, err)
 		return
 	}
 
 	res := struct {
 		Message string `json:"message"`
 	}{
-		Message: "deleted",
+		Message: message,
 	}
 
 	functions.RespondwithJSON(w, http.StatusOK, res)

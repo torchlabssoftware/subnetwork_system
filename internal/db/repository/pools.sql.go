@@ -124,14 +124,13 @@ func (q *Queries) DeleteCountry(ctx context.Context, name string) error {
 	return err
 }
 
-const deletePool = `-- name: DeletePool :exec
+const deletePool = `-- name: DeletePool :execresult
 DELETE FROM pool
 WHERE tag = $1
 `
 
-func (q *Queries) DeletePool(ctx context.Context, tag string) error {
-	_, err := q.db.ExecContext(ctx, deletePool, tag)
-	return err
+func (q *Queries) DeletePool(ctx context.Context, tag string) (sql.Result, error) {
+	return q.db.ExecContext(ctx, deletePool, tag)
 }
 
 const deletePoolUpstreamWeight = `-- name: DeletePoolUpstreamWeight :exec

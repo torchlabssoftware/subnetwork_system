@@ -21,7 +21,7 @@ type Querier interface {
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	CreateWorker(ctx context.Context, arg CreateWorkerParams) (Worker, error)
 	DeleteCountry(ctx context.Context, name string) error
-	DeletePool(ctx context.Context, tag string) error
+	DeletePool(ctx context.Context, tag string) (sql.Result, error)
 	DeletePoolUpstreamWeight(ctx context.Context, arg DeletePoolUpstreamWeightParams) error
 	DeleteRegion(ctx context.Context, name string) error
 	DeleteUpstreamByTag(ctx context.Context, tag string) error

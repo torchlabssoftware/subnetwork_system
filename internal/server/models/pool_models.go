@@ -103,14 +103,14 @@ type CreateUpstreamWeightResponce struct {
 }
 
 type CreatePoolResponce struct {
-	Id        uuid.UUID                       `json:"id,omitempty"`
-	Tag       *string                         `json:"tag,omitempty"`
-	RegionId  *uuid.UUID                      `json:"region_id,omitempty"`
-	Subdomain *string                         `json:"subdomain,omitempty"`
-	Port      *int32                          `json:"port,omitempty"`
-	UpStreams *[]CreateUpstreamWeightResponce `json:"upstreams,omitempty"`
-	CreatedAt time.Time                       `json:"created_at,omitempty"`
-	UpdatedAt time.Time                       `json:"updated_at,omitempty"`
+	Id        uuid.UUID                      `json:"id,omitempty"`
+	Tag       string                         `json:"tag,omitempty"`
+	RegionId  uuid.UUID                      `json:"region_id,omitempty"`
+	Subdomain string                         `json:"subdomain,omitempty"`
+	Port      int32                          `json:"port,omitempty"`
+	UpStreams []CreateUpstreamWeightResponce `json:"upstreams,omitempty"`
+	CreatedAt time.Time                      `json:"created_at,omitempty"`
+	UpdatedAt time.Time                      `json:"updated_at,omitempty"`
 }
 
 type PoolUpstream struct {
