@@ -1,7 +1,6 @@
 package server
 
 import (
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -9,7 +8,6 @@ import (
 	"github.com/go-chi/chi"
 	"github.com/google/uuid"
 
-	"github.com/torchlabssoftware/subnetwork_system/internal/db/repository"
 	functions "github.com/torchlabssoftware/subnetwork_system/internal/server/functions"
 	middleware "github.com/torchlabssoftware/subnetwork_system/internal/server/middleware"
 	server "github.com/torchlabssoftware/subnetwork_system/internal/server/models"
@@ -18,28 +16,21 @@ import (
 )
 
 type WorkerHandler struct {
-	queries       *repository.Queries
-	db            *sql.DB
-	wsManager     *wsm.WebsocketManager
-	analytics     service.AnalyticsService
 	workerService service.WorkerService
+	wsManager     *wsm.WebsocketManager
 }
 
-func NewWorkerHandler(q *repository.Queries, db *sql.DB, analytics service.AnalyticsService, workerService service.WorkerService) *WorkerHandler {
+func NewWorkerHandler(workerService service.WorkerService, wsManager *wsm.WebsocketManager) *WorkerHandler {
 	w := &WorkerHandler{
-		queries:       q,
-		db:            db,
-		analytics:     analytics,
 		workerService: workerService,
+		wsManager:     wsManager,
 	}
-	w.wsManager = wsm.NewWebsocketManager(q, analytics)
 	return w
 }
 
 func (wh *WorkerHandler) AdminRoutes() http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.AdminAuthentication)
-
 	r.Post("/", wh.AddWorker)
 	r.Get("/", wh.GetAllWorkers)
 	r.Get("/{name}", wh.GetWorkerByName)
@@ -51,8 +42,8 @@ func (wh *WorkerHandler) AdminRoutes() http.Handler {
 
 func (wh *WorkerHandler) WorkerRoutes() http.Handler {
 	r := chi.NewRouter()
-
-	r.Post("/ws/login", middleware.WorkerAuthentication(wh.login))
+	r.Use(middleware.WorkerAuthentication)
+	r.Post("/ws/login", wh.login)
 	r.Get("/ws/serve", wh.serveWS)
 	return r
 }
@@ -67,20 +58,17 @@ func (wh *WorkerHandler) login(w http.ResponseWriter, r *http.Request) {
 		functions.RespondwithError(w, http.StatusBadRequest, "WorkerId is required", fmt.Errorf("worker_id is required"))
 		return
 	}
-	_, err := wh.queries.GetWorkerById(r.Context(), *req.WorkerId)
+	code, message, err := wh.workerService.Login(r.Context(), *req.WorkerId)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			functions.RespondwithError(w, http.StatusNotFound, "Worker not found", err)
-			return
-		}
-		functions.RespondwithError(w, http.StatusInternalServerError, "Failed to get worker", err)
+		functions.RespondwithError(w, code, message, err)
 		return
 	}
-	otp := wh.wsManager.OtpMap.NewOTP(*req.WorkerId)
-	resp := server.WorkerLoginResponce{
-		Otp: otp.Key,
+
+	newOTP := wh.wsManager.OtpMap.NewOTP(*req.WorkerId)
+	resp := &server.WorkerLoginResponce{
+		Otp: newOTP.Key,
 	}
-	functions.RespondwithJSON(w, http.StatusOK, resp)
+	functions.RespondwithJSON(w, code, resp)
 }
 
 func (wh *WorkerHandler) serveWS(w http.ResponseWriter, r *http.Request) {

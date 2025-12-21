@@ -13,7 +13,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/torchlabssoftware/subnetwork_system/internal/db/repository"
 	functions "github.com/torchlabssoftware/subnetwork_system/internal/server/functions"
-	"github.com/torchlabssoftware/subnetwork_system/internal/server/service"
+	service "github.com/torchlabssoftware/subnetwork_system/internal/server/service"
 )
 
 var (

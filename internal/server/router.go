@@ -12,6 +12,7 @@ import (
 	"github.com/torchlabssoftware/subnetwork_system/internal/db/repository"
 	handlers "github.com/torchlabssoftware/subnetwork_system/internal/server/handlers"
 	service "github.com/torchlabssoftware/subnetwork_system/internal/server/service"
+	wsm "github.com/torchlabssoftware/subnetwork_system/internal/server/websocket"
 )
 
 func NewRouter(pool *sql.DB, clickHouseConn driver.Conn) http.Handler {
@@ -33,13 +34,17 @@ func NewRouter(pool *sql.DB, clickHouseConn driver.Conn) http.Handler {
 	}))
 
 	q := repository.New(pool)
+
 	u := handlers.NewUserHandler(service.NewUserService(q, pool))
+
 	p := handlers.NewPoolHandler(service.NewPoolService(q, pool))
+
 	analyticsService := service.NewAnalyticsService(clickHouseConn)
 	analyticsService.StartWorkers()
-	ws := service.NewWorkerService(q, pool)
-	w := handlers.NewWorkerHandler(q, pool, analyticsService, ws)
 	a := handlers.NewAnalyticsHandler(analyticsService)
+
+	wsManager := wsm.NewWebsocketManager(q, analyticsService)
+	w := handlers.NewWorkerHandler(service.NewWorkerService(q, pool), wsManager)
 
 	router.Route("/admin", func(r chi.Router) {
 		r.Mount("/users", u.AdminRoutes())

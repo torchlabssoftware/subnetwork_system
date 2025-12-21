@@ -11,6 +11,7 @@ import (
 )
 
 type WorkerService interface {
+	Login(ctx context.Context, req uuid.UUID) (code int, message string, err error)
 	CreateWorker(ctx context.Context, req *server.AddWorkerRequest) (res *server.AddWorkerResponse, code int, message string, err error)
 	GetWorkers(ctx context.Context) (res []server.AddWorkerResponse, code int, message string, err error)
 	GetWorkerByName(ctx context.Context, name string) (res *server.AddWorkerResponse, code int, message string, err error)
@@ -25,10 +26,22 @@ type workerService struct {
 }
 
 func NewWorkerService(queries *repository.Queries, db *sql.DB) WorkerService {
-	return &workerService{
+	workerService := &workerService{
 		queries: queries,
 		db:      db,
 	}
+	return workerService
+}
+
+func (s *workerService) Login(ctx context.Context, req uuid.UUID) (code int, message string, err error) {
+	_, err = s.queries.GetWorkerById(ctx, req)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return http.StatusNotFound, "Worker not found", err
+		}
+		return http.StatusInternalServerError, "Failed to get worker", err
+	}
+	return http.StatusOK, "", nil
 }
 
 func (s *workerService) CreateWorker(ctx context.Context, req *server.AddWorkerRequest) (res *server.AddWorkerResponse, code int, message string, err error) {

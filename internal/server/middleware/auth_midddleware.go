@@ -39,7 +39,7 @@ func AdminAuthentication(next http.Handler) http.Handler {
 	})
 }
 
-func WorkerAuthentication(next http.HandlerFunc) http.HandlerFunc {
+func WorkerAuthentication(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		workerKey := os.Getenv("WORKER_API_KEY")
 		if workerKey == "" {
