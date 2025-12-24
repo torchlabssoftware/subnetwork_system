@@ -23,7 +23,7 @@ type Worker struct {
 	Name       string
 }
 
-type WorkerList map[*Worker]bool
+type WorkerList map[uuid.UUID]*Worker
 
 func NewWorker(conn *websocket.Conn, manager *WebsocketManager) *Worker {
 	return &Worker{

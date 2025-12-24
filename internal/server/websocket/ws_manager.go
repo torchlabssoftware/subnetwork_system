@@ -77,10 +77,14 @@ func (ws *WebsocketManager) ServeWS(w http.ResponseWriter, r *http.Request, work
 	worker := NewWorker(conn, ws)
 	worker.ID = workerID
 
-	// Fetch initial config to get worker name and validate existence
-	// We can do this asynchronously but it's better to have name set up
+	if _, ok := ws.Workers[workerID]; ok {
+		log.Println("Worker already connected via WebSocket:", workerID)
+		conn.Close()
+		return
+	}
+
 	go func() {
-		if err := ws.sendWorkerConfiguration(worker); err != nil {
+		if err := ws.handleRequestConfig(Event{}, worker); err != nil {
 			log.Printf("Failed to send initial configuration to worker %s: %v", workerID, err)
 		}
 	}()
@@ -178,40 +182,19 @@ func (ws *WebsocketManager) handleTelemetryAccessLog(event Event, w *Worker) err
 func (ws *WebsocketManager) AddWorker(w *Worker) {
 	ws.Lock()
 	defer ws.Unlock()
-	ws.Workers[w] = true
+	ws.Workers[w.ID] = w
 }
 
 func (ws *WebsocketManager) RemoveWorker(w *Worker) {
 	ws.Lock()
 	defer ws.Unlock()
-	if _, ok := ws.Workers[w]; ok {
+	if _, ok := ws.Workers[w.ID]; ok {
 		w.Connection.Close()
-		delete(ws.Workers, w)
+		delete(ws.Workers, w.ID)
 	}
 }
 
-type UpstreamConfig struct {
-	UpstreamID      uuid.UUID `json:"upstream_id"`
-	UpstreamTag     string    `json:"upstream_tag"`
-	UpstreamAddress string    `json:"upstream_address"`
-	UpstreamHost    string    `json:"upstream_host"`
-	UpstreamPort    int32     `json:"upstream_port"`
-	Weight          int32     `json:"weight"`
-}
-
-type ConfigPayload struct {
-	PoolID        uuid.UUID        `json:"pool_id"`
-	PoolTag       string           `json:"pool_tag"`
-	PoolPort      int32            `json:"pool_port"`
-	PoolSubdomain string           `json:"pool_subdomain"`
-	Upstreams     []UpstreamConfig `json:"upstreams"`
-}
-
 func (ws *WebsocketManager) handleRequestConfig(event Event, w *Worker) error {
-	return ws.sendWorkerConfiguration(w)
-}
-
-func (ws *WebsocketManager) sendWorkerConfiguration(w *Worker) error {
 	rows, err := ws.queries.GetWorkerPoolConfig(context.Background(), w.ID)
 	if err != nil {
 		return fmt.Errorf("failed to fetch worker pool config: %v", err)
@@ -221,10 +204,8 @@ func (ws *WebsocketManager) sendWorkerConfiguration(w *Worker) error {
 		return fmt.Errorf("no configuration found for worker %s", w.ID)
 	}
 
-	// Assume all rows belong to the same pool (worker is assigned to one pool)
 	firstRow := rows[0]
 
-	// Update worker name if not set
 	if w.Name == "" {
 		w.Name = firstRow.WorkerName
 	}
@@ -242,7 +223,7 @@ func (ws *WebsocketManager) sendWorkerConfiguration(w *Worker) error {
 			UpstreamID:      row.UpstreamID,
 			UpstreamTag:     row.UpstreamTag,
 			UpstreamAddress: row.UpstreamAddress,
-			UpstreamHost:    row.UpstreamAddress, // Using domain as host
+			UpstreamHost:    row.UpstreamAddress,
 			UpstreamPort:    row.UpstreamPort,
 			Weight:          row.Weight,
 		})
