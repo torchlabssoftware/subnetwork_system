@@ -1,9 +1,9 @@
 package websocket
 
 import (
-	"sync"
+	"time"
 
-	"github.com/gorilla/websocket"
+	"github.com/google/uuid"
 )
 
 type Event struct {
@@ -36,11 +36,11 @@ type UpstreamConfig struct {
 	Weight          int32  `json:"weight"`
 }
 
-type CaptainClient struct {
-	BaseURL   string
-	WorkerID  string
-	APIKey    string
-	Conn      *websocket.Conn
-	mu        sync.Mutex
-	reconnect bool
+type User struct {
+	ID        uuid.UUID `json:"id"`
+	Username  string    `json:"username"`
+	Password  string    `json:"password"`
+	Status    string    `json:"status"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }

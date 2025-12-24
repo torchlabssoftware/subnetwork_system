@@ -7,10 +7,22 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
 )
+
+type CaptainClient struct {
+	BaseURL            string
+	WorkerID           string
+	APIKey             string
+	Conn               *websocket.Conn
+	mu                 sync.Mutex
+	reconnect          bool
+	pendingValidations sync.Map
+	users              map[string]*User
+}
 
 func NewCaptainClient(baseURL, workerID, apiKey string) *CaptainClient {
 	return &CaptainClient{
@@ -18,6 +30,7 @@ func NewCaptainClient(baseURL, workerID, apiKey string) *CaptainClient {
 		WorkerID:  workerID,
 		APIKey:    apiKey,
 		reconnect: true,
+		users:     make(map[string]*User),
 	}
 }
 
@@ -135,11 +148,61 @@ func (c *CaptainClient) handleEvent(event Event) {
 	case "config":
 		c.processConfig(event.Payload)
 	case "login_success":
-		log.Println("[Captain] Login confirmed by server")
+		c.processVerifyUserResponse(event.Payload)
 	case "error":
 		log.Printf("[Captain] Error from server: %v", event.Payload)
 	default:
 		log.Printf("[Captain] Unhandled event type: %s", event.Type)
+	}
+}
+
+func (c *CaptainClient) VerifyUser(user, pass string) bool {
+
+	c.mu.Lock()
+	c.users[user] = &User{Username: user, Password: pass}
+	c.mu.Unlock()
+
+	respChan := make(chan bool)
+	log.Println(user)
+	c.pendingValidations.Store(user, respChan)
+	defer c.pendingValidations.Delete(user)
+
+	payload := map[string]string{
+		"username": user,
+		"password": pass,
+	}
+
+	if err := c.Send(Event{Type: "verify_user", Payload: payload}); err != nil {
+		log.Printf("[Captain] Failed to send verify_user: %v", err)
+		return false
+	}
+
+	select {
+	case result := <-respChan:
+		return result
+	case <-time.After(5 * time.Second):
+		log.Printf("[Captain] VerifyUser timeout for %s", user)
+		return false
+	}
+}
+
+func (c *CaptainClient) processVerifyUserResponse(payload interface{}) {
+	data, _ := json.Marshal(payload)
+	var resp struct {
+		Success bool `json:"success"`
+		Payload User `json:"payload"`
+	}
+	if err := json.Unmarshal(data, &resp); err != nil {
+		log.Printf("[Captain] Failed to parse verify_user_response: %v", err)
+		return
+	}
+
+	log.Println(resp)
+
+	log.Println(resp.Payload.Username)
+
+	if ch, ok := c.pendingValidations.Load(resp.Payload.Username); ok {
+		ch.(chan bool) <- resp.Success
 	}
 }
 

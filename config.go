@@ -104,9 +104,10 @@ func initConfig() (err error) {
 	}
 
 	// Start Captain Client if configured
+	var client *captain.CaptainClient
 	if captainURL != "" && *workerID != "" {
 		log.Printf("Starting Captain Client (URL: %s, WorkerID: %s)", captainURL, *workerID)
-		client := captain.NewCaptainClient(captainURL, *workerID, envConfig.APIKey)
+		client = captain.NewCaptainClient(captainURL, *workerID, envConfig.APIKey)
 		client.Start()
 	} else {
 		log.Println("Captain Client not configured (missing captain-url or worker-id)")
@@ -129,7 +130,7 @@ func initConfig() (err error) {
 	services.Regist("tserver", services.NewTunnelServer(), tunnelServerArgs)
 	services.Regist("tclient", services.NewTunnelClient(), tunnelClientArgs)
 	services.Regist("tbridge", services.NewTunnelBridge(), tunnelBridgeArgs)
-	service, err = services.Run(serviceName)
+	service, err = services.Run(serviceName, client.VerifyUser)
 	if err != nil {
 		log.Fatalf("run service [%s] fail, ERR:%s", service, err)
 	}

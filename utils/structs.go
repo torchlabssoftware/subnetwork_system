@@ -32,9 +32,9 @@ type CheckerItem struct {
 	FailCount    uint
 }
 
-//NewChecker args:
-//timeout : tcp timeout milliseconds ,connect to host
-//interval: recheck domain interval seconds
+// NewChecker args:
+// timeout : tcp timeout milliseconds ,connect to host
+// interval: recheck domain interval seconds
 func NewChecker(timeout int, interval int64, blockedFile, directFile string) Checker {
 	ch := Checker{
 		data:     NewConcurrentMap(),
@@ -174,7 +174,8 @@ func (c *Checker) Add(address string, isHTTPS bool, method, URL string, data []b
 }
 
 type BasicAuth struct {
-	data ConcurrentMap
+	data      ConcurrentMap
+	Validator func(string, string) bool
 }
 
 func NewBasicAuth() BasicAuth {
@@ -216,7 +217,13 @@ func (ba *BasicAuth) Check(userpass string) (ok bool) {
 	u := strings.Split(strings.Trim(userpass, " "), ":")
 	if len(u) == 2 {
 		if p, _ok := ba.data.Get(u[0]); _ok {
+			log.Printf("basic auth check , user:%s pass:%s", u[0], u[1])
 			return p.(string) == u[1]
+		}
+
+		// Fallback to external validator if set
+		if ba.Validator != nil {
+			return ba.Validator(u[0], u[1])
 		}
 	}
 	return
@@ -277,12 +284,14 @@ func NewHTTPRequest(inConn *net.Conn, bufSize int, isBasicAuth bool, basicAuth *
 	return
 }
 func (req *HTTPRequest) HTTP() (err error) {
-	if req.isBasicAuth {
-		err = req.BasicAuth()
-		if err != nil {
-			return
-		}
+
+	//	if req.isBasicAuth {
+
+	err = req.BasicAuth()
+	if err != nil {
+		return
 	}
+	//	}
 	req.URL, err = req.getHTTPURL()
 	if err == nil {
 		u, _ := url.Parse(req.URL)
@@ -308,7 +317,7 @@ func (req *HTTPRequest) IsHTTPS() bool {
 func (req *HTTPRequest) BasicAuth() (err error) {
 
 	//log.Printf("request :%s", string(b[:n]))
-	authorization, err := req.getHeader("Authorization")
+	authorization, err := req.getHeader("Proxy-Authorization")
 	if err != nil {
 		fmt.Fprint((*req.conn), "HTTP/1.1 401 Unauthorized\r\nWWW-Authenticate: Basic realm=\"\"\r\n\r\nUnauthorized")
 		CloseConn(req.conn)
@@ -327,6 +336,7 @@ func (req *HTTPRequest) BasicAuth() (err error) {
 		CloseConn(req.conn)
 		return
 	}
+
 	authOk := (*req.basicAuth).Check(string(user))
 	//log.Printf("auth %s,%v", string(user), authOk)
 	if !authOk {

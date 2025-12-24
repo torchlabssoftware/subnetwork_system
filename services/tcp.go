@@ -5,9 +5,10 @@ import (
 	"io"
 	"log"
 	"net"
-	"github.com/snail007/goproxy/utils"
 	"runtime/debug"
 	"time"
+
+	"github.com/snail007/goproxy/utils"
 
 	"strconv"
 )
@@ -23,6 +24,7 @@ func NewTCP() Service {
 		cfg:     TCPArgs{},
 	}
 }
+
 func (s *TCP) InitService() {
 	s.InitOutConnPool()
 }
@@ -31,7 +33,7 @@ func (s *TCP) StopService() {
 		s.outPool.Pool.ReleaseAll()
 	}
 }
-func (s *TCP) Start(args interface{}) (err error) {
+func (s *TCP) Start(args interface{}, validator func(string, string) bool) (err error) {
 	s.cfg = args.(TCPArgs)
 	if *s.cfg.Parent != "" {
 		log.Printf("use %s parent %s", *s.cfg.ParentType, *s.cfg.Parent)

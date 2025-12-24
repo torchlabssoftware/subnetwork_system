@@ -6,7 +6,7 @@ import (
 	"time"
 )
 
-//ConnPool to use
+// ConnPool to use
 type ConnPool interface {
 	Get() (conn interface{}, err error)
 	Put(conn interface{})

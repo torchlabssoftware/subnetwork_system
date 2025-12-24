@@ -7,7 +7,7 @@ import (
 )
 
 type Service interface {
-	Start(args interface{}) (err error)
+	Start(args interface{}, validator func(string, string) bool) (err error)
 	Clean()
 }
 type ServiceItem struct {
@@ -25,7 +25,7 @@ func Regist(name string, s Service, args interface{}) {
 		Name: name,
 	}
 }
-func Run(name string) (service *ServiceItem, err error) {
+func Run(name string, validator func(string, string) bool) (service *ServiceItem, err error) {
 	service, ok := servicesMap[name]
 	if ok {
 		go func() {
@@ -35,7 +35,7 @@ func Run(name string) (service *ServiceItem, err error) {
 					log.Fatalf("%s servcie crashed, ERR: %s\ntrace:%s", name, err, string(debug.Stack()))
 				}
 			}()
-			err := service.S.Start(service.Args)
+			err := service.S.Start(service.Args, validator)
 			if err != nil {
 				log.Fatalf("%s servcie fail, ERR: %s", name, err)
 			}

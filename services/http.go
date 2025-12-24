@@ -5,9 +5,10 @@ import (
 	"io"
 	"log"
 	"net"
-	"github.com/snail007/goproxy/utils"
 	"runtime/debug"
 	"strconv"
+
+	"github.com/snail007/goproxy/utils"
 )
 
 type HTTP struct {
@@ -15,6 +16,10 @@ type HTTP struct {
 	cfg       HTTPArgs
 	checker   utils.Checker
 	basicAuth utils.BasicAuth
+}
+
+func (s *HTTP) SetValidator(validator func(string, string) bool) {
+	s.basicAuth.Validator = validator
 }
 
 func NewHTTP() Service {
@@ -36,7 +41,7 @@ func (s *HTTP) StopService() {
 		s.outPool.Pool.ReleaseAll()
 	}
 }
-func (s *HTTP) Start(args interface{}) (err error) {
+func (s *HTTP) Start(args interface{}, validator func(string, string) bool) (err error) {
 	s.cfg = args.(HTTPArgs)
 	if *s.cfg.Parent != "" {
 		log.Printf("use %s parent %s", *s.cfg.ParentType, *s.cfg.Parent)
@@ -44,6 +49,8 @@ func (s *HTTP) Start(args interface{}) (err error) {
 	}
 
 	s.InitService()
+
+	s.SetValidator(validator)
 
 	host, port, _ := net.SplitHostPort(*s.cfg.Local)
 	p, _ := strconv.Atoi(port)
@@ -72,7 +79,7 @@ func (s *HTTP) callback(inConn net.Conn) {
 	req, err := utils.NewHTTPRequest(&inConn, 4096, s.IsBasicAuth(), &s.basicAuth)
 	if err != nil {
 		if err != io.EOF {
-			log.Printf("decoder error , form %s, ERR:%s", err, inConn.RemoteAddr())
+			log.Printf("decoder error , form %s, ERR:%s", inConn.RemoteAddr(), err)
 		}
 		utils.CloseConn(&inConn)
 		return

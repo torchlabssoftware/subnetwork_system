@@ -8,11 +8,12 @@ import (
 	"io"
 	"log"
 	"net"
-	"github.com/snail007/goproxy/utils"
 	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/snail007/goproxy/utils"
 )
 
 type TunnelServer struct {
@@ -49,7 +50,7 @@ func (s *TunnelServer) Check() {
 }
 func (s *TunnelServer) StopService() {
 }
-func (s *TunnelServer) Start(args interface{}) (err error) {
+func (s *TunnelServer) Start(args interface{}, validator func(string, string) bool) (err error) {
 	s.cfg = args.(TunnelServerArgs)
 	s.Check()
 	s.InitService()

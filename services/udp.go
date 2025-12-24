@@ -7,11 +7,12 @@ import (
 	"io"
 	"log"
 	"net"
-	"github.com/snail007/goproxy/utils"
 	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/snail007/goproxy/utils"
 )
 
 type UDP struct {
@@ -37,7 +38,7 @@ func (s *UDP) StopService() {
 		s.outPool.Pool.ReleaseAll()
 	}
 }
-func (s *UDP) Start(args interface{}) (err error) {
+func (s *UDP) Start(args interface{}, validator func(string, string) bool) (err error) {
 	s.cfg = args.(UDPArgs)
 	if *s.cfg.Parent != "" {
 		log.Printf("use %s parent %s", *s.cfg.ParentType, *s.cfg.Parent)

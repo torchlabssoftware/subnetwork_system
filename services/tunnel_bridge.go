@@ -6,10 +6,11 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"github.com/snail007/goproxy/utils"
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/snail007/goproxy/utils"
 )
 
 type BridgeItem struct {
@@ -43,7 +44,7 @@ func (s *TunnelBridge) Check() {
 func (s *TunnelBridge) StopService() {
 
 }
-func (s *TunnelBridge) Start(args interface{}) (err error) {
+func (s *TunnelBridge) Start(args interface{}, validator func(string, string) bool) (err error) {
 	s.cfg = args.(TunnelBridgeArgs)
 	s.Check()
 	s.InitService()

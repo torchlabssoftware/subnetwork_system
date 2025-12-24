@@ -8,8 +8,9 @@ import (
 	"io"
 	"log"
 	"net"
-	"github.com/snail007/goproxy/utils"
 	"time"
+
+	"github.com/snail007/goproxy/utils"
 )
 
 type TunnelClient struct {
@@ -36,7 +37,7 @@ func (s *TunnelClient) Check() {
 }
 func (s *TunnelClient) StopService() {
 }
-func (s *TunnelClient) Start(args interface{}) (err error) {
+func (s *TunnelClient) Start(args interface{}, validator func(string, string) bool) (err error) {
 	s.cfg = args.(TunnelClientArgs)
 	s.Check()
 	s.InitService()
