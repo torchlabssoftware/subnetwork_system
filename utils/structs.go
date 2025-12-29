@@ -301,6 +301,12 @@ func (req *HTTPRequest) HTTP() (err error) {
 	return
 }
 func (req *HTTPRequest) HTTPS() (err error) {
+
+	err = req.BasicAuth()
+	if err != nil {
+		return
+	}
+
 	req.Host = req.hostOrURL
 	req.addPortIfNot()
 	//_, err = fmt.Fprint(*req.conn, "HTTP/1.1 200 Connection established\r\n\r\n")

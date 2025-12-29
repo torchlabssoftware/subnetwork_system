@@ -163,7 +163,7 @@ func (c *CaptainClient) VerifyUser(user, pass string) bool {
 	c.mu.Unlock()
 
 	respChan := make(chan bool)
-	log.Println(user)
+
 	c.pendingValidations.Store(user, respChan)
 	defer c.pendingValidations.Delete(user)
 
@@ -196,10 +196,6 @@ func (c *CaptainClient) processVerifyUserResponse(payload interface{}) {
 		log.Printf("[Captain] Failed to parse verify_user_response: %v", err)
 		return
 	}
-
-	log.Println(resp)
-
-	log.Println(resp.Payload.Username)
 
 	if ch, ok := c.pendingValidations.Load(resp.Payload.Username); ok {
 		ch.(chan bool) <- resp.Success
