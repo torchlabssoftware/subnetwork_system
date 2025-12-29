@@ -122,9 +122,19 @@ WHERE user_id = $1
   AND ip_cidr = ANY($2::TEXT[]);
 
 -- name: GetUserByUsername :one
-SELECT *
-FROM "user"
-WHERE username = $1;
+SELECT 
+    u.id,
+    u.username,
+    u.password,
+    u.status,
+    COALESCE(ARRAY_AGG(DISTINCT iw.ip_cidr) FILTER (WHERE iw.ip_cidr IS NOT NULL), '{}')::text[] AS ip_whitelist,
+    COALESCE(ARRAY_AGG(DISTINCT p.tag) FILTER (WHERE p.tag IS NOT NULL), '{}')::text[] AS pools
+FROM "user" AS u
+LEFT JOIN user_ip_whitelist AS iw ON u.id = iw.user_id
+LEFT JOIN user_pools AS up ON u.id = up.user_id
+LEFT JOIN pool AS p ON up.pool_id = p.id
+WHERE u.username = $1
+GROUP BY u.id;
 
 -- name: GenerateproxyString :one
 SELECT p.tag,p.subdomain,p.port,u.username,u.password FROM pool as p

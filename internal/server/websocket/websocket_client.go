@@ -44,8 +44,6 @@ func (w *Worker) ReadMessage() {
 		return
 	}
 
-	w.Connection.SetReadLimit(4096)
-
 	w.Connection.SetPongHandler(w.PongHandler)
 
 	for {
@@ -106,7 +104,7 @@ func (w *Worker) WriteMessage() {
 			}
 			log.Println("Sent message")
 		case <-ticker.C:
-			log.Println("ping")
+			log.Println("ping to", w.Name)
 			if err := w.Connection.WriteMessage(websocket.PingMessage, []byte(``)); err != nil {
 				log.Println("write message error")
 				return

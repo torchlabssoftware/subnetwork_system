@@ -256,21 +256,40 @@ func (q *Queries) GetDatausageById(ctx context.Context, userID uuid.UUID) ([]Get
 }
 
 const getUserByUsername = `-- name: GetUserByUsername :one
-SELECT id, username, password, status, created_at, updated_at
-FROM "user"
-WHERE username = $1
+SELECT 
+    u.id,
+    u.username,
+    u.password,
+    u.status,
+    COALESCE(ARRAY_AGG(DISTINCT iw.ip_cidr) FILTER (WHERE iw.ip_cidr IS NOT NULL), '{}')::text[] AS ip_whitelist,
+    COALESCE(ARRAY_AGG(DISTINCT p.tag) FILTER (WHERE p.tag IS NOT NULL), '{}')::text[] AS pools
+FROM "user" AS u
+LEFT JOIN user_ip_whitelist AS iw ON u.id = iw.user_id
+LEFT JOIN user_pools AS up ON u.id = up.user_id
+LEFT JOIN pool AS p ON up.pool_id = p.id
+WHERE u.username = $1
+GROUP BY u.id
 `
 
-func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User, error) {
+type GetUserByUsernameRow struct {
+	ID          uuid.UUID
+	Username    string
+	Password    string
+	Status      string
+	IpWhitelist []string
+	Pools       []string
+}
+
+func (q *Queries) GetUserByUsername(ctx context.Context, username string) (GetUserByUsernameRow, error) {
 	row := q.db.QueryRowContext(ctx, getUserByUsername, username)
-	var i User
+	var i GetUserByUsernameRow
 	err := row.Scan(
 		&i.ID,
 		&i.Username,
 		&i.Password,
 		&i.Status,
-		&i.CreatedAt,
-		&i.UpdatedAt,
+		pq.Array(&i.IpWhitelist),
+		pq.Array(&i.Pools),
 	)
 	return i, err
 }

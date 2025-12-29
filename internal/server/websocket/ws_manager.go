@@ -18,8 +18,8 @@ import (
 
 var (
 	websocketUpgrader = &websocket.Upgrader{
-		ReadBufferSize:  1024,
-		WriteBufferSize: 1024,
+		ReadBufferSize:  4096,
+		WriteBufferSize: 4096,
 		CheckOrigin: func(r *http.Request) bool {
 			return true
 		},
@@ -48,7 +48,7 @@ func NewWebsocketManager(queries *repository.Queries, analytics service.Analytic
 }
 
 func (ws *WebsocketManager) setupEventHandlers() {
-	ws.Handlers["login"] = ws.handleLogin
+	ws.Handlers["verify_user"] = ws.handleLogin
 	ws.Handlers["telemetry_usage"] = ws.handleTelemetryUsage
 	ws.Handlers["telemetry_health"] = ws.handleTelemetryHealth
 	ws.Handlers["request_config"] = ws.handleRequestConfig
@@ -120,9 +120,18 @@ func (ws *WebsocketManager) handleLogin(event Event, w *Worker) error {
 		return fmt.Errorf("login failed: incorrect password")
 	}
 
+	succcessPayload := loginSuccessPayload{
+		ID:          user.ID,
+		Username:    user.Username,
+		Password:    user.Password,
+		Status:      user.Status,
+		IpWhitelist: user.IpWhitelist,
+		Pools:       user.Pools,
+	}
+
 	w.egress <- Event{
 		Type:    "login_success",
-		Payload: successPayload{Success: true, Payload: user},
+		Payload: successPayload{Success: true, Payload: succcessPayload},
 	}
 
 	return nil

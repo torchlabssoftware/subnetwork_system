@@ -38,7 +38,7 @@ type Querier interface {
 	GetPoolByTagWithUpstreams(ctx context.Context, tag string) ([]GetPoolByTagWithUpstreamsRow, error)
 	GetRegions(ctx context.Context) ([]Region, error)
 	GetUpstreams(ctx context.Context) ([]Upstream, error)
-	GetUserByUsername(ctx context.Context, username string) (User, error)
+	GetUserByUsername(ctx context.Context, username string) (GetUserByUsernameRow, error)
 	GetUserIpwhitelistByUserId(ctx context.Context, id uuid.UUID) ([]string, error)
 	GetUserPoolsByUserId(ctx context.Context, id uuid.UUID) (GetUserPoolsByUserIdRow, error)
 	GetUserbyId(ctx context.Context, id uuid.UUID) (GetUserbyIdRow, error)

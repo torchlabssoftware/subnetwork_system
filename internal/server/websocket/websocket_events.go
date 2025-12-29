@@ -1,6 +1,8 @@
 package server
 
-import "github.com/google/uuid"
+import (
+	"github.com/google/uuid"
+)
 
 type Event struct {
 	Type    string      `json:"type"`
@@ -22,6 +24,15 @@ type successPayload struct {
 type errorPayload struct {
 	Success bool        `json:"success"`
 	Payload interface{} `json:"payload"`
+}
+
+type loginSuccessPayload struct {
+	ID          uuid.UUID `json:"id"`
+	Username    string    `json:"username"`
+	Password    string    `json:"password"`
+	Status      string    `json:"status"`
+	IpWhitelist []string  `json:"ip_whitelist"`
+	Pools       []string  `json:"pools"`
 }
 
 type UpstreamConfig struct {
