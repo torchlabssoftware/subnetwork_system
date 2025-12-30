@@ -1,4 +1,4 @@
-package websocket
+package worker
 
 import (
 	"bytes"
@@ -11,30 +11,32 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/snail007/goproxy/manager/pool"
 )
 
-type CaptainClient struct {
-	BaseURL            string
+type Worker struct {
 	WorkerID           string
+	CaptainURL         string
 	APIKey             string
-	Conn               *websocket.Conn
+	WebsocketManager   *WebsocketManager
 	mu                 sync.Mutex
 	reconnect          bool
 	pendingValidations sync.Map
 	users              map[string]*User
+	pool               *pool.Pool
 }
 
-func NewCaptainClient(baseURL, workerID, apiKey string) *CaptainClient {
-	return &CaptainClient{
-		BaseURL:   baseURL,
-		WorkerID:  workerID,
-		APIKey:    apiKey,
-		reconnect: true,
-		users:     make(map[string]*User),
+func NewWorker(baseURL, workerID, apiKey string) *Worker {
+	return &Worker{
+		CaptainURL: baseURL,
+		WorkerID:   workerID,
+		APIKey:     apiKey,
+		reconnect:  true,
+		users:      make(map[string]*User),
 	}
 }
 
-func (c *CaptainClient) Start() {
+func (c *Worker) Start() {
 	go func() {
 		for c.reconnect {
 			if err := c.Connect(); err != nil {
@@ -49,13 +51,13 @@ func (c *CaptainClient) Start() {
 	}()
 }
 
-func (c *CaptainClient) Connect() error {
+func (c *Worker) Connect() error {
 	otp, err := c.login()
 	if err != nil {
 		return fmt.Errorf("login failed: %v", err)
 	}
 
-	wsURL, err := url.Parse(c.BaseURL)
+	wsURL, err := url.Parse(c.CaptainURL)
 	if err != nil {
 		return fmt.Errorf("invalid base URL: %v", err)
 	}
@@ -81,29 +83,29 @@ func (c *CaptainClient) Connect() error {
 	}
 
 	c.mu.Lock()
-	c.Conn = conn
+	c.WebsocketManager = NewWebsocketManager(c, conn)
 	c.mu.Unlock()
 
 	defer func() {
 		c.mu.Lock()
-		c.Conn.Close()
-		c.Conn = nil
+		c.WebsocketManager.Connection.Close()
+		c.WebsocketManager = nil
 		c.mu.Unlock()
 	}()
 
 	log.Println("[Captain] WebSocket connected successfully")
 
-	for {
-		var event Event
-		if err := conn.ReadJSON(&event); err != nil {
-			return fmt.Errorf("read error: %v", err)
-		}
-		c.handleEvent(event)
-	}
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go c.WebsocketManager.ReadMessage(&wg)
+	go c.WebsocketManager.WriteMessage(&wg)
+	wg.Wait()
+
+	return fmt.Errorf("connection closed")
 }
 
-func (c *CaptainClient) login() (string, error) {
-	loginURL := fmt.Sprintf("%s/worker/ws/login", c.BaseURL)
+func (c *Worker) login() (string, error) {
+	loginURL := fmt.Sprintf("%s/worker/ws/login", c.CaptainURL)
 	body, _ := json.Marshal(LoginRequest{WorkerID: c.WorkerID})
 
 	req, err := http.NewRequest(http.MethodPost, loginURL, bytes.NewBuffer(body))
@@ -132,7 +134,7 @@ func (c *CaptainClient) login() (string, error) {
 	return loginResp.Otp, nil
 }
 
-func (c *CaptainClient) handleEvent(event Event) {
+func (c *Worker) HandleEvent(event Event) {
 	log.Printf("[Captain] Received event: %s", event.Type)
 
 	switch event.Type {
@@ -147,16 +149,7 @@ func (c *CaptainClient) handleEvent(event Event) {
 	}
 }
 
-func (c *CaptainClient) Send(event Event) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.Conn == nil {
-		return fmt.Errorf("not connected")
-	}
-	return c.Conn.WriteJSON(event)
-}
-
-func (c *CaptainClient) VerifyUser(user, pass string) bool {
+func (c *Worker) VerifyUser(user, pass string) bool {
 
 	c.mu.Lock()
 	c.users[user] = &User{Username: user, Password: pass}
@@ -172,10 +165,7 @@ func (c *CaptainClient) VerifyUser(user, pass string) bool {
 		"password": pass,
 	}
 
-	if err := c.Send(Event{Type: "verify_user", Payload: payload}); err != nil {
-		log.Printf("[Captain] Failed to send verify_user: %v", err)
-		return false
-	}
+	c.WebsocketManager.egress <- Event{Type: "verify_user", Payload: payload}
 
 	select {
 	case result := <-respChan:
@@ -186,7 +176,7 @@ func (c *CaptainClient) VerifyUser(user, pass string) bool {
 	}
 }
 
-func (c *CaptainClient) processVerifyUserResponse(payload interface{}) {
+func (c *Worker) processVerifyUserResponse(payload interface{}) {
 	data, _ := json.Marshal(payload)
 	var resp struct {
 		Success bool `json:"success"`
@@ -207,13 +197,25 @@ func (c *CaptainClient) processVerifyUserResponse(payload interface{}) {
 	}
 }
 
-func (c *CaptainClient) processConfig(payload interface{}) {
+func (c *Worker) processConfig(payload interface{}) {
 	data, _ := json.Marshal(payload)
 	var config ConfigPayload
 	if err := json.Unmarshal(data, &config); err != nil {
 		log.Printf("[Captain] Failed to parse config: %v", err)
 		return
 	}
+	upstreams := make([]pool.Upstream, 0)
+	for _, upstream := range config.Upstreams {
+		upstreams = append(upstreams, pool.Upstream{
+			UpstreamID:      upstream.UpstreamID,
+			UpstreamTag:     upstream.UpstreamTag,
+			UpstreamAddress: upstream.UpstreamAddress,
+			UpstreamHost:    upstream.UpstreamHost,
+			UpstreamPort:    upstream.UpstreamPort,
+			Weight:          upstream.Weight,
+		})
+	}
+	c.pool = pool.NewPool(config.PoolID, config.PoolTag, config.PoolPort, config.PoolSubdomain, upstreams)
 	log.Printf("[Captain] Configuration received for Pool: %s (Port: %d)", config.PoolTag, config.PoolPort)
 	log.Printf("[Captain] Upstreams count: %d", len(config.Upstreams))
 }

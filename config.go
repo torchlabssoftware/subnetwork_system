@@ -7,7 +7,7 @@ import (
 	"os"
 
 	"github.com/snail007/goproxy/manager/env"
-	captain "github.com/snail007/goproxy/manager/websocket"
+	captain "github.com/snail007/goproxy/manager/worker"
 	"github.com/snail007/goproxy/services"
 	"github.com/snail007/goproxy/utils"
 
@@ -119,11 +119,11 @@ func initConfig() (err error) {
 	}
 
 	// Start Captain Client if configured
-	var client *captain.CaptainClient
+	var worker *captain.Worker
 	if captainURL != "" && *workerID != "" {
 		log.Printf("Starting Captain Client (URL: %s, WorkerID: %s)", captainURL, *workerID)
-		client = captain.NewCaptainClient(captainURL, *workerID, envConfig.APIKey)
-		client.Start()
+		worker = captain.NewWorker(captainURL, *workerID, envConfig.APIKey)
+		worker.Start()
 	} else {
 		log.Println("Captain Client not configured (missing captain-url or worker-id)")
 	}
@@ -147,7 +147,7 @@ func initConfig() (err error) {
 	services.Regist("tserver", services.NewTunnelServer(), tunnelServerArgs)
 	services.Regist("tclient", services.NewTunnelClient(), tunnelClientArgs)
 	services.Regist("tbridge", services.NewTunnelBridge(), tunnelBridgeArgs)
-	service, err = services.Run(serviceName, client.VerifyUser)
+	service, err = services.Run(serviceName, worker.VerifyUser)
 	if err != nil {
 		log.Fatalf("run service [%s] fail, ERR:%s", service, err)
 	}
