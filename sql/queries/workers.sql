@@ -65,6 +65,8 @@ SELECT
     u.tag AS upstream_tag,
     u.domain AS upstream_address,
     u.port AS upstream_port,
+    u.format As upstream_format,
+    u.upstream_provider AS upstream_provider,
     puw.weight
 FROM worker w
 JOIN pool p ON w.pool_id = p.id

@@ -220,21 +220,23 @@ func (ws *WebsocketManager) handleRequestConfig(event Event, w *Worker) error {
 	}
 
 	config := ConfigPayload{
+		WorkerName:    firstRow.WorkerName,
 		PoolID:        firstRow.PoolID,
 		PoolTag:       firstRow.PoolTag,
-		PoolPort:      firstRow.PoolPort,
+		PoolPort:      int(firstRow.PoolPort),
 		PoolSubdomain: firstRow.PoolSubdomain,
 		Upstreams:     make([]UpstreamConfig, 0),
 	}
 
 	for _, row := range rows {
 		config.Upstreams = append(config.Upstreams, UpstreamConfig{
-			UpstreamID:      row.UpstreamID,
-			UpstreamTag:     row.UpstreamTag,
-			UpstreamAddress: row.UpstreamAddress,
-			UpstreamHost:    row.UpstreamAddress,
-			UpstreamPort:    row.UpstreamPort,
-			Weight:          row.Weight,
+			UpstreamID:       row.UpstreamID,
+			UpstreamTag:      row.UpstreamTag,
+			UpstreamFormat:   row.UpstreamFormat,
+			UpstreamHost:     row.UpstreamAddress,
+			UpstreamPort:     int(row.UpstreamPort),
+			UpstreamProvider: row.UpstreamProvider,
+			Weight:           int(row.Weight),
 		})
 	}
 

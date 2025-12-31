@@ -35,6 +35,7 @@ func NewWorker(conn *websocket.Conn, manager *WebsocketManager) *Worker {
 
 func (w *Worker) ReadMessage() {
 	defer func() {
+		close(w.egress)
 		w.Manager.RemoveWorker(w)
 		w.Connection.Close()
 	}()

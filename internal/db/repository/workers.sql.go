@@ -230,6 +230,8 @@ SELECT
     u.tag AS upstream_tag,
     u.domain AS upstream_address,
     u.port AS upstream_port,
+    u.format As upstream_format,
+    u.upstream_provider AS upstream_provider,
     puw.weight
 FROM worker w
 JOIN pool p ON w.pool_id = p.id
@@ -239,16 +241,18 @@ WHERE w.id = $1
 `
 
 type GetWorkerPoolConfigRow struct {
-	WorkerName      string
-	PoolID          uuid.UUID
-	PoolTag         string
-	PoolPort        int32
-	PoolSubdomain   string
-	UpstreamID      uuid.UUID
-	UpstreamTag     string
-	UpstreamAddress string
-	UpstreamPort    int32
-	Weight          int32
+	WorkerName       string
+	PoolID           uuid.UUID
+	PoolTag          string
+	PoolPort         int32
+	PoolSubdomain    string
+	UpstreamID       uuid.UUID
+	UpstreamTag      string
+	UpstreamAddress  string
+	UpstreamPort     int32
+	UpstreamFormat   string
+	UpstreamProvider string
+	Weight           int32
 }
 
 func (q *Queries) GetWorkerPoolConfig(ctx context.Context, id uuid.UUID) ([]GetWorkerPoolConfigRow, error) {
@@ -270,6 +274,8 @@ func (q *Queries) GetWorkerPoolConfig(ctx context.Context, id uuid.UUID) ([]GetW
 			&i.UpstreamTag,
 			&i.UpstreamAddress,
 			&i.UpstreamPort,
+			&i.UpstreamFormat,
+			&i.UpstreamProvider,
 			&i.Weight,
 		); err != nil {
 			return nil, err
