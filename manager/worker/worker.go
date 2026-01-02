@@ -207,12 +207,15 @@ func (c *Worker) processConfig(payload interface{}) {
 	upstreams := make([]pool.Upstream, 0)
 	for _, upstream := range config.Upstreams {
 		upstreams = append(upstreams, pool.Upstream{
-			UpstreamID:      upstream.UpstreamID,
-			UpstreamTag:     upstream.UpstreamTag,
-			UpstreamAddress: upstream.UpstreamAddress,
-			UpstreamHost:    upstream.UpstreamHost,
-			UpstreamPort:    upstream.UpstreamPort,
-			Weight:          upstream.Weight,
+			UpstreamID:       upstream.UpstreamID,
+			UpstreamTag:      upstream.UpstreamTag,
+			UpstreamFormat:   upstream.UpstreamFormat,
+			UpstreamUsername: upstream.UpstreamUsername,
+			UpstreamPassword: upstream.UpstreamPassword,
+			UpstreamHost:     upstream.UpstreamHost,
+			UpstreamPort:     int(upstream.UpstreamPort),
+			UpstreamProvider: upstream.UpstreamProvider,
+			Weight:           upstream.Weight,
 		})
 	}
 	c.pool = pool.NewPool(config.PoolID, config.PoolTag, config.PoolPort, config.PoolSubdomain, upstreams)
