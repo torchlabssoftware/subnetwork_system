@@ -1,4 +1,4 @@
-package worker
+package manager
 
 import (
 	"bytes"
@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	"github.com/snail007/goproxy/manager/pool"
 )
 
 type Worker struct {
@@ -23,7 +22,7 @@ type Worker struct {
 	reconnect          bool
 	pendingValidations sync.Map
 	users              map[string]*User
-	pool               *pool.Pool
+	pool               *Pool
 }
 
 func NewWorker(baseURL, workerID, apiKey string) *Worker {
@@ -204,9 +203,9 @@ func (c *Worker) processConfig(payload interface{}) {
 		log.Printf("[Captain] Failed to parse config: %v", err)
 		return
 	}
-	upstreams := make([]pool.Upstream, 0)
+	upstreams := make([]Upstream, 0)
 	for _, upstream := range config.Upstreams {
-		upstreams = append(upstreams, pool.Upstream{
+		upstreams = append(upstreams, Upstream{
 			UpstreamID:       upstream.UpstreamID,
 			UpstreamTag:      upstream.UpstreamTag,
 			UpstreamFormat:   upstream.UpstreamFormat,
@@ -218,7 +217,7 @@ func (c *Worker) processConfig(payload interface{}) {
 			Weight:           upstream.Weight,
 		})
 	}
-	c.pool = pool.NewPool(config.PoolID, config.PoolTag, config.PoolPort, config.PoolSubdomain, upstreams)
+	c.pool = NewPool(config.PoolID, config.PoolTag, config.PoolPort, config.PoolSubdomain, upstreams)
 	log.Printf("[Captain] Configuration received for Pool: %s (Port: %d)", config.PoolTag, config.PoolPort)
 	log.Printf("[Captain] Upstreams count: %d", len(config.Upstreams))
 }

@@ -6,8 +6,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/snail007/goproxy/manager/env"
-	captain "github.com/snail007/goproxy/manager/worker"
+	manager "github.com/snail007/goproxy/manager"
 	"github.com/snail007/goproxy/services"
 	"github.com/snail007/goproxy/utils"
 
@@ -17,11 +16,11 @@ import (
 var (
 	app       *kingpin.Application
 	service   *services.ServiceItem
-	envConfig env.EnvConfig
+	envConfig manager.EnvConfig
 )
 
 func initConfig() (err error) {
-	envConfig = env.Load()
+	envConfig = manager.Load()
 
 	//keygen
 	if len(os.Args) > 1 {
@@ -119,10 +118,10 @@ func initConfig() (err error) {
 	}
 
 	// Start Captain Client if configured
-	var worker *captain.Worker
+	var worker *manager.Worker
 	if captainURL != "" && *workerID != "" {
 		log.Printf("Starting Captain Client (URL: %s, WorkerID: %s)", captainURL, *workerID)
-		worker = captain.NewWorker(captainURL, *workerID, envConfig.APIKey)
+		worker = manager.NewWorker(captainURL, *workerID, envConfig.APIKey)
 		worker.Start()
 	} else {
 		log.Println("Captain Client not configured (missing captain-url or worker-id)")
