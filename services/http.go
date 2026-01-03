@@ -12,14 +12,16 @@ import (
 	"runtime/debug"
 	"strconv"
 
+	"github.com/snail007/goproxy/manager"
 	"github.com/snail007/goproxy/utils"
 )
 
 type HTTP struct {
-	outPool   utils.OutPool
-	cfg       HTTPArgs
-	checker   utils.Checker
-	basicAuth utils.BasicAuth
+	outPool     utils.OutPool
+	cfg         HTTPArgs
+	checker     utils.Checker
+	basicAuth   utils.BasicAuth
+	upstreamMgr *manager.UpstreamManager
 }
 
 func (s *HTTP) SetValidator(validator func(string, string) bool) {
@@ -36,8 +38,11 @@ func NewHTTP() Service {
 }
 func (s *HTTP) InitService() {
 	s.InitBasicAuth()
-	if *s.cfg.Parent != "" {
-		s.checker = utils.NewChecker(*s.cfg.HTTPTimeout, int64(*s.cfg.Interval), *s.cfg.Blocked, *s.cfg.Direct)
+	// Only use checker if no upstream manager (fallback to -P flag)
+	if *s.cfg.Parent != "" || s.upstreamMgr == nil || !s.upstreamMgr.HasUpstreams() {
+		if *s.cfg.Parent != "" {
+			s.checker = utils.NewChecker(*s.cfg.HTTPTimeout, int64(*s.cfg.Interval), *s.cfg.Blocked, *s.cfg.Direct)
+		}
 	}
 }
 func (s *HTTP) StopService() {
@@ -45,12 +50,12 @@ func (s *HTTP) StopService() {
 		s.outPool.Pool.ReleaseAll()
 	}
 }
-func (s *HTTP) Start(args interface{}, validator func(string, string) bool) (err error) {
+func (s *HTTP) Start(args interface{}, validator func(string, string) bool, upstreamMgr *manager.UpstreamManager) (err error) {
 	s.cfg = args.(HTTPArgs)
+	s.upstreamMgr = upstreamMgr
+
 	if *s.cfg.Parent != "" {
 		log.Printf("use %s parent %s", *s.cfg.ParentType, *s.cfg.Parent)
-		//remove the connection pool for proxy chain
-		//s.InitOutConnPool()
 	}
 
 	s.InitService()
@@ -91,9 +96,10 @@ func (s *HTTP) callback(inConn net.Conn) {
 	}
 	address := req.Host
 
-	useProxy := true
-	if *s.cfg.Parent == "" {
-		useProxy = false
+	// Determine if we should use upstream proxy
+	useProxy := false
+	if s.upstreamMgr != nil && s.upstreamMgr.HasUpstreams() || *s.cfg.Parent != "" {
+		useProxy = true
 	} else if *s.cfg.Always {
 		useProxy = true
 	} else {
@@ -102,12 +108,10 @@ func (s *HTTP) callback(inConn net.Conn) {
 		} else {
 			s.checker.Add(address, false, req.Method, req.URL, req.HeadBuf)
 		}
-		//var n, m uint
 		useProxy, _, _ = s.checker.IsBlocked(req.Host)
-		//log.Printf("blocked ? : %v, %s , fail:%d ,success:%d", useProxy, address, n, m)
 	}
+
 	log.Printf("use proxy : %v, %s", useProxy, address)
-	//os.Exit(0)
 	err = s.OutToTCP(useProxy, address, &inConn, &req)
 	if err != nil {
 		if *s.cfg.Parent == "" {
@@ -121,24 +125,39 @@ func (s *HTTP) callback(inConn net.Conn) {
 func (s *HTTP) OutToTCP(useProxy bool, address string, inConn *net.Conn, req *utils.HTTPRequest) (err error) {
 	inAddr := (*inConn).RemoteAddr().String()
 	inLocalAddr := (*inConn).LocalAddr().String()
-	//防止死循环
+
 	if s.IsDeadLoop(inLocalAddr, req.Host) {
 		utils.CloseConn(inConn)
 		err = fmt.Errorf("dead loop detected , %s", req.Host)
 		return
 	}
+
 	var outConn net.Conn
-	var _outConn interface{}
+	var upstreamUser, upstreamPass string
+
 	if useProxy {
-		//for proxy chain it use direct tcp but not connection pool
-		//_outConn, err = s.outPool.Pool.Get()
-		_outConn, err = utils.ConnectHost(*s.cfg.Parent, *s.cfg.Timeout)
-		if err == nil {
-			outConn = _outConn.(net.Conn)
+		// Try to get upstream from manager (round-robin)
+		if s.upstreamMgr != nil && s.upstreamMgr.HasUpstreams() {
+			upstream := s.upstreamMgr.Next()
+			if upstream != nil {
+				upstreamAddr := upstream.GetAddress()
+				upstreamUser = upstream.UpstreamUsername
+				upstreamPass = upstream.UpstreamPassword
+				log.Printf("[Upstream] Connecting to: %s (tag: %s)", upstreamAddr, upstream.UpstreamTag)
+				outConn, err = utils.ConnectHost(upstreamAddr, *s.cfg.Timeout)
+			} else {
+				err = fmt.Errorf("no upstream available")
+			}
+		} else if *s.cfg.Parent != "" {
+			// Fallback to -P flag if no upstreams from Captain
+			outConn, err = utils.ConnectHost(*s.cfg.Parent, *s.cfg.Timeout)
+		} else {
+			err = fmt.Errorf("no upstream configured")
 		}
 	} else {
 		outConn, err = utils.ConnectHost(address, *s.cfg.Timeout)
 	}
+
 	if err != nil {
 		log.Printf("connect to %s , err:%s", *s.cfg.Parent, err)
 		utils.CloseConn(inConn)
@@ -157,10 +176,14 @@ func (s *HTTP) OutToTCP(useProxy bool, address string, inConn *net.Conn, req *ut
 			return err
 		}
 		httpReq.Header.Del("Proxy-Authorization")
-		user := "alice"
-		pass := "alicepass"
-		token := base64.StdEncoding.EncodeToString([]byte(user + ":" + pass))
-		httpReq.Header.Set("Proxy-Authorization", "Basic "+token)
+
+		// Use upstream credentials if available
+		if upstreamUser != "" && upstreamPass != "" {
+			token := base64.StdEncoding.EncodeToString([]byte(upstreamUser + ":" + upstreamPass))
+			httpReq.Header.Set("Proxy-Authorization", "Basic "+token)
+			log.Printf("[Upstream] Using credentials for user: %s", upstreamUser)
+		}
+
 		var buf bytes.Buffer
 		httpReq.WriteProxy(&buf)
 		outConn.Write(buf.Bytes())

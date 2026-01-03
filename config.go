@@ -146,7 +146,7 @@ func initConfig() (err error) {
 	services.Regist("tserver", services.NewTunnelServer(), tunnelServerArgs)
 	services.Regist("tclient", services.NewTunnelClient(), tunnelClientArgs)
 	services.Regist("tbridge", services.NewTunnelBridge(), tunnelBridgeArgs)
-	service, err = services.Run(serviceName, worker.VerifyUser)
+	service, err = services.Run(serviceName, worker.VerifyUser, worker.UpstreamManager)
 	if err != nil {
 		log.Fatalf("run service [%s] fail, ERR:%s", service, err)
 	}

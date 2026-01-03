@@ -4,10 +4,12 @@ import (
 	"fmt"
 	"log"
 	"runtime/debug"
+
+	"github.com/snail007/goproxy/manager"
 )
 
 type Service interface {
-	Start(args interface{}, validator func(string, string) bool) (err error)
+	Start(args interface{}, validator func(string, string) bool, upstreamMgr *manager.UpstreamManager) (err error)
 	Clean()
 }
 type ServiceItem struct {
@@ -25,7 +27,7 @@ func Regist(name string, s Service, args interface{}) {
 		Name: name,
 	}
 }
-func Run(name string, validator func(string, string) bool) (service *ServiceItem, err error) {
+func Run(name string, validator func(string, string) bool, upstreamMgr *manager.UpstreamManager) (service *ServiceItem, err error) {
 	service, ok := servicesMap[name]
 	if ok {
 		go func() {
@@ -35,7 +37,7 @@ func Run(name string, validator func(string, string) bool) (service *ServiceItem
 					log.Fatalf("%s servcie crashed, ERR: %s\ntrace:%s", name, err, string(debug.Stack()))
 				}
 			}()
-			err := service.S.Start(service.Args, validator)
+			err := service.S.Start(service.Args, validator, upstreamMgr)
 			if err != nil {
 				log.Fatalf("%s servcie fail, ERR: %s", name, err)
 			}

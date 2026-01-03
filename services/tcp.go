@@ -8,6 +8,7 @@ import (
 	"runtime/debug"
 	"time"
 
+	"github.com/snail007/goproxy/manager"
 	"github.com/snail007/goproxy/utils"
 
 	"strconv"
@@ -33,7 +34,7 @@ func (s *TCP) StopService() {
 		s.outPool.Pool.ReleaseAll()
 	}
 }
-func (s *TCP) Start(args interface{}, validator func(string, string) bool) (err error) {
+func (s *TCP) Start(args interface{}, validator func(string, string) bool, upstreamMgr *manager.UpstreamManager) (err error) {
 	s.cfg = args.(TCPArgs)
 	if *s.cfg.Parent != "" {
 		log.Printf("use %s parent %s", *s.cfg.ParentType, *s.cfg.Parent)

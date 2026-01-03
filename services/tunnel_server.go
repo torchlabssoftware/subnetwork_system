@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/snail007/goproxy/manager"
 	"github.com/snail007/goproxy/utils"
 )
 
@@ -50,7 +51,7 @@ func (s *TunnelServer) Check() {
 }
 func (s *TunnelServer) StopService() {
 }
-func (s *TunnelServer) Start(args interface{}, validator func(string, string) bool) (err error) {
+func (s *TunnelServer) Start(args interface{}, validator func(string, string) bool, upstreamMgr *manager.UpstreamManager) (err error) {
 	s.cfg = args.(TunnelServerArgs)
 	s.Check()
 	s.InitService()

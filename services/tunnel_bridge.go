@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/snail007/goproxy/manager"
 	"github.com/snail007/goproxy/utils"
 )
 
@@ -44,7 +45,7 @@ func (s *TunnelBridge) Check() {
 func (s *TunnelBridge) StopService() {
 
 }
-func (s *TunnelBridge) Start(args interface{}, validator func(string, string) bool) (err error) {
+func (s *TunnelBridge) Start(args interface{}, validator func(string, string) bool, upstreamMgr *manager.UpstreamManager) (err error) {
 	s.cfg = args.(TunnelBridgeArgs)
 	s.Check()
 	s.InitService()

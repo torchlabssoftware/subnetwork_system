@@ -24,15 +24,17 @@ type Worker struct {
 	pendingValidations sync.Map
 	users              util.ConcurrentMap
 	pool               *Pool
+	UpstreamManager    *UpstreamManager
 }
 
 func NewWorker(baseURL, workerID, apiKey string) *Worker {
 	return &Worker{
-		CaptainURL: baseURL,
-		WorkerID:   workerID,
-		APIKey:     apiKey,
-		reconnect:  true,
-		users:      util.NewConcurrentMap(),
+		CaptainURL:      baseURL,
+		WorkerID:        workerID,
+		APIKey:          apiKey,
+		reconnect:       true,
+		users:           util.NewConcurrentMap(),
+		UpstreamManager: NewUpstreamManager(),
 	}
 }
 
@@ -219,6 +221,10 @@ func (c *Worker) processConfig(payload interface{}) {
 		})
 	}
 	c.pool = NewPool(config.PoolID, config.PoolTag, config.PoolPort, config.PoolSubdomain, upstreams)
+
+	// Update the UpstreamManager with the new upstreams for round-robin load balancing
+	c.UpstreamManager.SetUpstreams(upstreams)
+
 	log.Printf("[Captain] Configuration received for Pool: %s (Port: %d)", config.PoolTag, config.PoolPort)
 	log.Printf("[Captain] Upstreams count: %d", len(config.Upstreams))
 }
