@@ -45,7 +45,7 @@ func (s *TunnelBridge) Check() {
 func (s *TunnelBridge) StopService() {
 
 }
-func (s *TunnelBridge) Start(args interface{}, validator func(string, string) bool, upstreamMgr *manager.UpstreamManager) (err error) {
+func (s *TunnelBridge) Start(args interface{}, validator func(string, string) bool, upstreamMgr *manager.UpstreamManager, worker *manager.Worker) (err error) {
 	s.cfg = args.(TunnelBridgeArgs)
 	s.Check()
 	s.InitService()

@@ -39,7 +39,7 @@ func (s *UDP) StopService() {
 		s.outPool.Pool.ReleaseAll()
 	}
 }
-func (s *UDP) Start(args interface{}, validator func(string, string) bool, upstreamMgr *manager.UpstreamManager) (err error) {
+func (s *UDP) Start(args interface{}, validator func(string, string) bool, upstreamMgr *manager.UpstreamManager, worker *manager.Worker) (err error) {
 	s.cfg = args.(UDPArgs)
 	if *s.cfg.Parent != "" {
 		log.Printf("use %s parent %s", *s.cfg.ParentType, *s.cfg.Parent)

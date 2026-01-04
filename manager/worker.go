@@ -22,8 +22,8 @@ type Worker struct {
 	mu                 sync.Mutex
 	reconnect          bool
 	pendingValidations sync.Map
-	users              util.ConcurrentMap
-	pool               *Pool
+	Users              util.ConcurrentMap
+	Pool               *Pool
 	UpstreamManager    *UpstreamManager
 }
 
@@ -33,7 +33,7 @@ func NewWorker(baseURL, workerID, apiKey string) *Worker {
 		WorkerID:        workerID,
 		APIKey:          apiKey,
 		reconnect:       true,
-		users:           util.NewConcurrentMap(),
+		Users:           util.NewConcurrentMap(),
 		UpstreamManager: NewUpstreamManager(),
 	}
 }
@@ -193,7 +193,7 @@ func (c *Worker) processVerifyUserResponse(payload interface{}) {
 				IpWhitelist: resp.Payload.IpWhitelist,
 				Pools:       resp.Payload.Pools,
 			}
-			c.users.Set(resp.Payload.Username, user)
+			c.Users.Set(resp.Payload.Username, user)
 			return
 		}
 	}
@@ -220,11 +220,36 @@ func (c *Worker) processConfig(payload interface{}) {
 			Weight:           upstream.Weight,
 		})
 	}
-	c.pool = NewPool(config.PoolID, config.PoolTag, config.PoolPort, config.PoolSubdomain, upstreams)
+	c.Pool = NewPool(config.PoolID, config.PoolTag, config.PoolPort, config.PoolSubdomain, upstreams)
 
 	// Update the UpstreamManager with the new upstreams for round-robin load balancing
 	c.UpstreamManager.SetUpstreams(upstreams)
 
 	log.Printf("[Captain] Configuration received for Pool: %s (Port: %d)", config.PoolTag, config.PoolPort)
 	log.Printf("[Captain] Upstreams count: %d", len(config.Upstreams))
+}
+
+// GetPoolInfo returns the current pool ID and name
+func (c *Worker) GetPoolInfo() (poolID, poolName string) {
+	if c.Pool != nil {
+		return c.Pool.PoolId.String(), c.Pool.PoolTag
+	}
+	return "", ""
+}
+
+// SendDataUsage sends a user data usage event to Captain via WebSocket
+func (c *Worker) SendDataUsage(usage UserDataUsage) {
+	if c.WebsocketManager == nil {
+		log.Printf("[DataUsage] WebSocket not connected, cannot send data usage")
+		return
+	}
+
+	event := Event{
+		Type:    "telemetry_usage",
+		Payload: usage,
+	}
+
+	c.WebsocketManager.egress <- event
+	log.Printf("[DataUsage] Sent usage: user=%s, bytes_sent=%d, bytes_received=%d, dest=%s:%d",
+		usage.Username, usage.BytesSent, usage.BytesReceived, usage.DestinationHost, usage.DestinationPort)
 }

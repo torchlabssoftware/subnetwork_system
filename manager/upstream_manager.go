@@ -10,8 +10,10 @@ import (
 )
 
 type Pool struct {
-	PoolId        uuid.UUID
-	PoolTag       string
+	PoolId  uuid.UUID
+	PoolTag string
+	//get region from captain
+	Region        string
 	PoolPort      int
 	PoolSubdomain string
 	Upstreams     []Upstream
@@ -36,6 +38,7 @@ func NewPool(poolId uuid.UUID, poolTag string, poolPort int, poolSubdomain strin
 		PoolPort:      poolPort,
 		PoolSubdomain: poolSubdomain,
 		Upstreams:     upstreams,
+		Region:        "",
 	}
 	return pool
 }

@@ -60,3 +60,20 @@ type User struct {
 	IpWhitelist []string
 	Pools       []string
 }
+
+// UserDataUsage tracks per-user data usage for reporting to Captain
+type UserDataUsage struct {
+	UserID          uuid.UUID `json:"user_id"`
+	Username        string    `json:"username"`
+	PoolID          uuid.UUID `json:"pool_id"`
+	PoolName        string    `json:"pool_name"`
+	WorkerID        uuid.UUID `json:"worker_id"`
+	WorkerRegion    string    `json:"worker_region"`
+	BytesSent       uint64    `json:"bytes_sent"`
+	BytesReceived   uint64    `json:"bytes_received"`
+	SourceIP        string    `json:"source_ip"`
+	Protocol        string    `json:"protocol"`
+	DestinationHost string    `json:"destination_host"`
+	DestinationPort uint16    `json:"destination_port"`
+	StatusCode      uint16    `json:"status_code"`
+}

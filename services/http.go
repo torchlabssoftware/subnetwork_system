@@ -11,7 +11,10 @@ import (
 	"net/http"
 	"runtime/debug"
 	"strconv"
+	"strings"
+	"sync/atomic"
 
+	"github.com/google/uuid"
 	"github.com/snail007/goproxy/manager"
 	"github.com/snail007/goproxy/utils"
 )
@@ -22,6 +25,7 @@ type HTTP struct {
 	checker     utils.Checker
 	basicAuth   utils.BasicAuth
 	upstreamMgr *manager.UpstreamManager
+	worker      *manager.Worker
 }
 
 func (s *HTTP) SetValidator(validator func(string, string) bool) {
@@ -50,9 +54,10 @@ func (s *HTTP) StopService() {
 		s.outPool.Pool.ReleaseAll()
 	}
 }
-func (s *HTTP) Start(args interface{}, validator func(string, string) bool, upstreamMgr *manager.UpstreamManager) (err error) {
+func (s *HTTP) Start(args interface{}, validator func(string, string) bool, upstreamMgr *manager.UpstreamManager, worker *manager.Worker) (err error) {
 	s.cfg = args.(HTTPArgs)
 	s.upstreamMgr = upstreamMgr
+	s.worker = worker
 
 	if *s.cfg.Parent != "" {
 		log.Printf("use %s parent %s", *s.cfg.ParentType, *s.cfg.Parent)
@@ -188,11 +193,67 @@ func (s *HTTP) OutToTCP(useProxy bool, address string, inConn *net.Conn, req *ut
 		httpReq.WriteProxy(&buf)
 		outConn.Write(buf.Bytes())
 	}
+
+	// Data usage tracking
+	var bytesSent uint64
+	var bytesReceived uint64
+	username := req.GetBasicAuthUser()
+	sourceIP := strings.Split(inAddr, ":")[0]
+
+	// Parse destination host and port
+	destHost, destPortStr, _ := net.SplitHostPort(req.Host)
+	if destHost == "" {
+		destHost = req.Host
+	}
+	var destPort uint16 = 80
+	if req.IsHTTPS() {
+		destPort = 443
+	}
+	if p, err := strconv.Atoi(destPortStr); err == nil {
+		destPort = uint16(p)
+	}
+
 	utils.IoBind((*inConn), outConn, func(isSrcErr bool, err error) {
 		log.Printf("conn %s - %s - %s -%s released [%s]", inAddr, inLocalAddr, outLocalAddr, outAddr, req.Host)
+
+		// Send data usage to Captain when connection closes
+		if s.worker != nil && (bytesSent > 0 || bytesReceived > 0) {
+			poolID, poolName := s.worker.GetPoolInfo()
+			workerUUID, _ := uuid.Parse(s.worker.WorkerID)
+			poolUUID, _ := uuid.Parse(poolID)
+
+			usage := manager.UserDataUsage{
+				UserID:          uuid.Nil,
+				Username:        username,
+				PoolID:          poolUUID,
+				PoolName:        poolName,
+				WorkerID:        workerUUID,
+				WorkerRegion:    s.worker.Pool.Region,
+				BytesSent:       atomic.LoadUint64(&bytesSent),
+				BytesReceived:   atomic.LoadUint64(&bytesReceived),
+				SourceIP:        sourceIP,
+				Protocol:        "HTTP",
+				DestinationHost: destHost,
+				DestinationPort: destPort,
+				StatusCode:      200, // Default success
+			}
+			if req.IsHTTPS() {
+				usage.Protocol = "HTTPS"
+			}
+
+			s.worker.SendDataUsage(usage)
+		}
+
 		utils.CloseConn(inConn)
 		utils.CloseConn(&outConn)
-	}, func(n int, d bool) {}, 0)
+	}, func(n int, isDownload bool) {
+		// Track bytes transferred
+		if isDownload {
+			atomic.AddUint64(&bytesReceived, uint64(n))
+		} else {
+			atomic.AddUint64(&bytesSent, uint64(n))
+		}
+	}, 0)
 	log.Printf("conn %s - %s - %s - %s connected [%s]", inAddr, inLocalAddr, outLocalAddr, outAddr, req.Host)
 	return
 }

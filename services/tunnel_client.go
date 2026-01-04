@@ -38,7 +38,7 @@ func (s *TunnelClient) Check() {
 }
 func (s *TunnelClient) StopService() {
 }
-func (s *TunnelClient) Start(args interface{}, validator func(string, string) bool, upstreamMgr *manager.UpstreamManager) (err error) {
+func (s *TunnelClient) Start(args interface{}, validator func(string, string) bool, upstreamMgr *manager.UpstreamManager, worker *manager.Worker) (err error) {
 	s.cfg = args.(TunnelClientArgs)
 	s.Check()
 	s.InitService()

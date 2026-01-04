@@ -328,7 +328,11 @@ func (req *HTTPRequest) BasicAuth() (err error) {
 	//log.Printf("request :%s", string(b[:n]))
 	authorization, err := req.getHeader("Proxy-Authorization")
 	if err != nil {
-		fmt.Fprint((*req.conn), "HTTP/1.1 401 Unauthorized\r\nWWW-Authenticate: Basic realm=\"\"\r\n\r\nUnauthorized")
+		fmt.Fprint((*req.conn),
+			"HTTP/1.1 407 Proxy Authentication Required\r\n"+
+				"Proxy-Authenticate: Basic realm=\"Proxy\"\r\n"+
+				"Content-Length: 0\r\n"+
+				"\r\n")
 		CloseConn(req.conn)
 		return
 	}
@@ -397,6 +401,28 @@ func (req *HTTPRequest) addPortIfNot() (newHost string) {
 		req.Host = req.Host + ":" + port
 	}
 	return
+}
+
+// GetBasicAuthUser extracts the username from the Proxy-Authorization header
+func (req *HTTPRequest) GetBasicAuthUser() string {
+	authHeader, err := req.getHeader("Proxy-Authorization")
+	if err != nil || authHeader == "" {
+		return ""
+	}
+	basic := strings.Fields(authHeader)
+	if len(basic) != 2 || strings.ToLower(basic[0]) != "basic" {
+		return ""
+	}
+	user, err := base64.StdEncoding.DecodeString(basic[1])
+	if err != nil {
+		return ""
+	}
+	// user is in format "username:password"
+	parts := strings.SplitN(string(user), ":", 2)
+	if len(parts) >= 1 {
+		return parts[0]
+	}
+	return ""
 }
 
 type OutPool struct {

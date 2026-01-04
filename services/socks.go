@@ -77,7 +77,7 @@ func (s *SOCKS) StopService() {
 	}
 }
 
-func (s *SOCKS) Start(args interface{}, validator func(string, string) bool, upstreamMgr *manager.UpstreamManager) (err error) {
+func (s *SOCKS) Start(args interface{}, validator func(string, string) bool, upstreamMgr *manager.UpstreamManager, worker *manager.Worker) (err error) {
 	s.cfg = args.(SOCKSArgs)
 	if *s.cfg.Parent != "" {
 		log.Printf("use %s parent %s", *s.cfg.ParentType, *s.cfg.Parent)
