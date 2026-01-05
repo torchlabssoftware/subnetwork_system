@@ -21,16 +21,11 @@ import (
 )
 
 type HTTP struct {
-	outPool     utils.OutPool
-	cfg         HTTPArgs
-	checker     utils.Checker
-	basicAuth   utils.BasicAuth
-	upstreamMgr *manager.UpstreamManager
-	worker      *manager.Worker
-}
-
-func (s *HTTP) SetValidator(validator func(string, string) bool) {
-	s.basicAuth.Validator = validator
+	outPool   utils.OutPool
+	cfg       HTTPArgs
+	checker   utils.Checker
+	basicAuth utils.BasicAuth
+	worker    *manager.Worker
 }
 
 func NewHTTP() Service {
@@ -43,11 +38,8 @@ func NewHTTP() Service {
 }
 func (s *HTTP) InitService() {
 	s.InitBasicAuth()
-	// Only use checker if no upstream manager (fallback to -P flag)
-	if *s.cfg.Parent != "" || s.upstreamMgr == nil || !s.upstreamMgr.HasUpstreams() {
-		if *s.cfg.Parent != "" {
-			s.checker = utils.NewChecker(*s.cfg.HTTPTimeout, int64(*s.cfg.Interval), *s.cfg.Blocked, *s.cfg.Direct)
-		}
+	if s.worker.UpstreamManager == nil || !s.worker.UpstreamManager.HasUpstreams() {
+		s.checker = utils.NewChecker(*s.cfg.HTTPTimeout, int64(*s.cfg.Interval), *s.cfg.Blocked, *s.cfg.Direct)
 	}
 }
 func (s *HTTP) StopService() {
@@ -55,18 +47,18 @@ func (s *HTTP) StopService() {
 		s.outPool.Pool.ReleaseAll()
 	}
 }
-func (s *HTTP) Start(args interface{}, validator func(string, string) bool, upstreamMgr *manager.UpstreamManager, worker *manager.Worker) (err error) {
+func (s *HTTP) Start(args interface{}, worker *manager.Worker) (err error) {
 	s.cfg = args.(HTTPArgs)
-	s.upstreamMgr = upstreamMgr
 	s.worker = worker
 
-	if *s.cfg.Parent != "" {
+	//add connection pool for upstream connections later
+	/*if *s.cfg.Parent != "" {
 		log.Printf("use %s parent %s", *s.cfg.ParentType, *s.cfg.Parent)
-	}
+		s.InitOutConnPool()
+	}*/
 
 	s.InitService()
-
-	s.SetValidator(validator)
+	s.basicAuth.Validator = worker.VerifyUser
 
 	host, port, _ := net.SplitHostPort(*s.cfg.Local)
 	p, _ := strconv.Atoi(port)
@@ -104,7 +96,7 @@ func (s *HTTP) callback(inConn net.Conn) {
 
 	// Determine if we should use upstream proxy
 	useProxy := false
-	if s.upstreamMgr != nil && s.upstreamMgr.HasUpstreams() || *s.cfg.Parent != "" {
+	if s.worker.UpstreamManager != nil && s.worker.UpstreamManager.HasUpstreams() {
 		useProxy = true
 	} else if *s.cfg.Always {
 		useProxy = true
@@ -120,10 +112,10 @@ func (s *HTTP) callback(inConn net.Conn) {
 	log.Printf("use proxy : %v, %s", useProxy, address)
 	err = s.OutToTCP(useProxy, address, &inConn, &req)
 	if err != nil {
-		if *s.cfg.Parent == "" {
-			log.Printf("connect to %s fail, ERR:%s", address, err)
+		if s.worker.UpstreamManager != nil && s.worker.UpstreamManager.HasUpstreams() {
+			log.Printf("connect to %s parent %s fail", *s.cfg.ParentType, "")
 		} else {
-			log.Printf("connect to %s parent %s fail", *s.cfg.ParentType, *s.cfg.Parent)
+			log.Printf("connect to %s fail, ERR:%s", address, err)
 		}
 		utils.CloseConn(&inConn)
 	}
@@ -144,8 +136,8 @@ func (s *HTTP) OutToTCP(useProxy bool, address string, inConn *net.Conn, req *ut
 
 	if useProxy {
 		// Try to get upstream from manager (round-robin)
-		if s.upstreamMgr != nil && s.upstreamMgr.HasUpstreams() {
-			upstream := s.upstreamMgr.Next()
+		if s.worker.UpstreamManager != nil && s.worker.UpstreamManager.HasUpstreams() {
+			upstream := s.worker.UpstreamManager.Next()
 			if upstream != nil {
 				currentUpstream = upstream
 				upstreamAddr := upstream.GetAddress()
@@ -170,9 +162,6 @@ func (s *HTTP) OutToTCP(useProxy bool, address string, inConn *net.Conn, req *ut
 			} else {
 				err = fmt.Errorf("no upstream available")
 			}
-		} else if *s.cfg.Parent != "" {
-			// Fallback to -P flag if no upstreams from Captain
-			outConn, err = utils.ConnectHost(*s.cfg.Parent, *s.cfg.Timeout)
 		} else {
 			err = fmt.Errorf("no upstream configured")
 		}
@@ -184,7 +173,7 @@ func (s *HTTP) OutToTCP(useProxy bool, address string, inConn *net.Conn, req *ut
 	_ = currentUpstream // Will be used for per-request upstream error tracking if needed
 
 	if err != nil {
-		log.Printf("connect to %s , err:%s", *s.cfg.Parent, err)
+		log.Printf("connect to %s , err:%s", "", err)
 		utils.CloseConn(inConn)
 		return
 	}
@@ -309,7 +298,8 @@ func (s *HTTP) InitOutConnPool() {
 			*s.cfg.CheckParentInterval,
 			*s.cfg.ParentType == TYPE_TLS,
 			s.cfg.CertBytes, s.cfg.KeyBytes,
-			*s.cfg.Parent,
+			//address for the connection pool
+			"",
 			*s.cfg.Timeout,
 			*s.cfg.PoolSize,
 			*s.cfg.PoolSize*2,

@@ -67,8 +67,10 @@ func NewSOCKS() Service {
 
 func (s *SOCKS) InitService() {
 	s.InitBasicAuth()
-	if *s.cfg.Parent != "" {
-		s.checker = utils.NewChecker(*s.cfg.Timeout, int64(*s.cfg.Interval), *s.cfg.Blocked, *s.cfg.Direct)
+	if s.worker.UpstreamManager == nil || !s.worker.UpstreamManager.HasUpstreams() {
+
+		s.checker = utils.NewChecker(*s.cfg.HTTPTimeout, int64(*s.cfg.Interval), *s.cfg.Blocked, *s.cfg.Direct)
+
 	}
 }
 
@@ -78,16 +80,17 @@ func (s *SOCKS) StopService() {
 	}
 }
 
-func (s *SOCKS) Start(args interface{}, validator func(string, string) bool, upstreamMgr *manager.UpstreamManager, worker *manager.Worker) (err error) {
+func (s *SOCKS) Start(args interface{}, worker *manager.Worker) (err error) {
 	s.cfg = args.(SOCKSArgs)
 	s.worker = worker
-	if *s.cfg.Parent != "" {
+
+	/*if *s.cfg.Parent != "" {
 		log.Printf("use %s parent %s", *s.cfg.ParentType, *s.cfg.Parent)
 		s.InitOutConnPool()
-	}
+	}*/
 
 	s.InitService()
-	s.SetValidator(validator)
+	s.SetValidator(worker.VerifyUser)
 
 	host, port, _ := net.SplitHostPort(*s.cfg.Local)
 	p, _ := strconv.Atoi(port)
@@ -132,7 +135,7 @@ func (s *SOCKS) callback(inConn net.Conn) {
 	}
 
 	useProxy := true
-	if *s.cfg.Parent == "" {
+	if s.worker.UpstreamManager == nil || !s.worker.UpstreamManager.HasUpstreams() {
 		useProxy = false
 	} else if *s.cfg.Always {
 		useProxy = true
@@ -144,10 +147,10 @@ func (s *SOCKS) callback(inConn net.Conn) {
 
 	err = s.OutToTCP(useProxy, address, &inConn)
 	if err != nil {
-		if *s.cfg.Parent == "" {
+		if s.worker.UpstreamManager == nil || !s.worker.UpstreamManager.HasUpstreams() {
 			log.Printf("connect to %s fail, ERR:%s", address, err)
 		} else {
-			log.Printf("connect to %s parent %s fail", *s.cfg.ParentType, *s.cfg.Parent)
+			log.Printf("connect to %s parent %s fail", *s.cfg.ParentType, "")
 		}
 		utils.CloseConn(&inConn)
 	}
@@ -380,7 +383,7 @@ func (s *SOCKS) InitOutConnPool() {
 			*s.cfg.CheckParentInterval,
 			*s.cfg.ParentType == TYPE_TLS,
 			s.cfg.CertBytes, s.cfg.KeyBytes,
-			*s.cfg.Parent,
+			"",
 			*s.cfg.Timeout,
 			*s.cfg.PoolSize,
 			*s.cfg.PoolSize*2,
