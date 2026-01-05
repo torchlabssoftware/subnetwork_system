@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/snail007/goproxy/manager"
@@ -139,17 +140,33 @@ func (s *HTTP) OutToTCP(useProxy bool, address string, inConn *net.Conn, req *ut
 
 	var outConn net.Conn
 	var upstreamUser, upstreamPass string
+	var currentUpstream *manager.Upstream
 
 	if useProxy {
 		// Try to get upstream from manager (round-robin)
 		if s.upstreamMgr != nil && s.upstreamMgr.HasUpstreams() {
 			upstream := s.upstreamMgr.Next()
 			if upstream != nil {
+				currentUpstream = upstream
 				upstreamAddr := upstream.GetAddress()
 				upstreamUser = upstream.UpstreamUsername
 				upstreamPass = upstream.UpstreamPassword
 				log.Printf("[Upstream] Connecting to: %s (tag: %s)", upstreamAddr, upstream.UpstreamTag)
+
+				// Measure connection latency for upstream health tracking
+				connectStart := time.Now()
 				outConn, err = utils.ConnectHost(upstreamAddr, *s.cfg.Timeout)
+				connectLatency := time.Since(connectStart)
+
+				// Record upstream latency in health collector
+				if s.worker != nil && s.worker.HealthCollector != nil {
+					s.worker.HealthCollector.RecordUpstreamLatency(
+						upstream.UpstreamID,
+						upstream.UpstreamTag,
+						connectLatency,
+						err != nil,
+					)
+				}
 			} else {
 				err = fmt.Errorf("no upstream available")
 			}
@@ -162,6 +179,9 @@ func (s *HTTP) OutToTCP(useProxy bool, address string, inConn *net.Conn, req *ut
 	} else {
 		outConn, err = utils.ConnectHost(address, *s.cfg.Timeout)
 	}
+
+	// Store current upstream for error tracking on connection close
+	_ = currentUpstream // Will be used for per-request upstream error tracking if needed
 
 	if err != nil {
 		log.Printf("connect to %s , err:%s", *s.cfg.Parent, err)
@@ -213,8 +233,24 @@ func (s *HTTP) OutToTCP(useProxy bool, address string, inConn *net.Conn, req *ut
 		destPort = uint16(p)
 	}
 
+	// Track connection in HealthCollector
+	if s.worker != nil && s.worker.HealthCollector != nil {
+		s.worker.HealthCollector.IncrementConnection()
+	}
+
 	utils.IoBind((*inConn), outConn, func(isSrcErr bool, err error) {
 		log.Printf("conn %s - %s - %s -%s released [%s]", inAddr, inLocalAddr, outLocalAddr, outAddr, req.Host)
+
+		// Decrement connection count
+		if s.worker != nil && s.worker.HealthCollector != nil {
+			s.worker.HealthCollector.DecrementConnection()
+			// Record success/error
+			if err != nil {
+				s.worker.HealthCollector.RecordError()
+			} else {
+				s.worker.HealthCollector.RecordSuccess()
+			}
+		}
 
 		// Send data usage to Captain when connection closes
 		if s.worker != nil && (bytesSent > 0 || bytesReceived > 0) {
@@ -253,9 +289,14 @@ func (s *HTTP) OutToTCP(useProxy bool, address string, inConn *net.Conn, req *ut
 		} else {
 			atomic.AddUint64(&bytesSent, uint64(n))
 		}
+		// Track throughput in HealthCollector
+		if s.worker != nil && s.worker.HealthCollector != nil {
+			s.worker.HealthCollector.AddThroughput(uint64(n))
+		}
 	}, 0)
 	log.Printf("conn %s - %s - %s - %s connected [%s]", inAddr, inLocalAddr, outLocalAddr, outAddr, req.Host)
 	return
+
 }
 func (s *HTTP) OutToUDP(inConn *net.Conn) (err error) {
 	return

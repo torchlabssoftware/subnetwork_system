@@ -49,6 +49,7 @@ type SOCKS struct {
 	cfg       SOCKSArgs
 	checker   utils.Checker
 	basicAuth utils.BasicAuth
+	worker    *manager.Worker
 }
 
 func (s *SOCKS) SetValidator(validator func(string, string) bool) {
@@ -79,6 +80,7 @@ func (s *SOCKS) StopService() {
 
 func (s *SOCKS) Start(args interface{}, validator func(string, string) bool, upstreamMgr *manager.UpstreamManager, worker *manager.Worker) (err error) {
 	s.cfg = args.(SOCKSArgs)
+	s.worker = worker
 	if *s.cfg.Parent != "" {
 		log.Printf("use %s parent %s", *s.cfg.ParentType, *s.cfg.Parent)
 		s.InitOutConnPool()
@@ -341,11 +343,33 @@ func (s *SOCKS) OutToTCP(useProxy bool, address string, inConn *net.Conn) (err e
 	outAddr := outConn.RemoteAddr().String()
 	outLocalAddr := outConn.LocalAddr().String()
 
+	// Track connection in HealthCollector
+	if s.worker != nil && s.worker.HealthCollector != nil {
+		s.worker.HealthCollector.IncrementConnection()
+	}
+
 	utils.IoBind((*inConn), outConn, func(isSrcErr bool, err error) {
 		log.Printf("conn %s - %s - %s -%s released [%s]", inAddr, inLocalAddr, outLocalAddr, outAddr, address)
+
+		// Decrement connection count
+		if s.worker != nil && s.worker.HealthCollector != nil {
+			s.worker.HealthCollector.DecrementConnection()
+			// Record success/error
+			if err != nil {
+				s.worker.HealthCollector.RecordError()
+			} else {
+				s.worker.HealthCollector.RecordSuccess()
+			}
+		}
+
 		utils.CloseConn(inConn)
 		utils.CloseConn(&outConn)
-	}, func(n int, d bool) {}, 0)
+	}, func(n int, d bool) {
+		// Track throughput in HealthCollector
+		if s.worker != nil && s.worker.HealthCollector != nil {
+			s.worker.HealthCollector.AddThroughput(uint64(n))
+		}
+	}, 0)
 	log.Printf("conn %s - %s - %s - %s connected [%s]", inAddr, inLocalAddr, outLocalAddr, outAddr, address)
 	return
 }
